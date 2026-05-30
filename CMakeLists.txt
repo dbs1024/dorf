@@ -1,7 +1,7 @@
 # Copyright (c) Darrin Stewart. All rights reserved.
 cmake_minimum_required(VERSION 3.20)
 
-project(Dorf)
+project(Ace)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

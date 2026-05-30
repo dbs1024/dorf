@@ -12,11 +12,11 @@ set(SOURCES
 	Source/Core.Util/FixedItemPool.cpp
 )
 
-add_library(Dorf.Core STATIC ${HEADERS} ${SOURCES})
+add_library(Ace.Core STATIC ${HEADERS} ${SOURCES})
 
 source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${HEADERS} ${SOURCES})
 
-target_include_directories(Dorf.Core
+target_include_directories(Ace.Core
 	PUBLIC  Include
 	PRIVATE Source
 )

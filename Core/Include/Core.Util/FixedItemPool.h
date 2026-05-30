@@ -74,7 +74,7 @@ template<typename T>
 inline void FixedItemPoolT<T>::init(int maxItems, size_t alignment)
 {
 	FixedItemPoolResult result = createFixedItemPool(m_pool, sizeof(T), maxItems, alignment);
-	DORF_ASSERT(result == FixedItemPoolResult::Success);
+	ACE_ASSERT(result == FixedItemPoolResult::Success);
 }
 
 template<typename T>
@@ -91,7 +91,7 @@ inline FixedItemHandle FixedItemPoolT<T>::alloc()
 {
 	FixedItemHandle item;
 	FixedItemPoolResult result = allocFixedItem(item, m_pool);
-	DORF_ASSERT(result == FixedItemPoolResult::Success);
+	ACE_ASSERT(result == FixedItemPoolResult::Success);
 	if (result != FixedItemPoolResult::Success)
 		return InvalidFixedItemHandle;
 	::new (getPtr(item)) T;
@@ -101,7 +101,7 @@ inline FixedItemHandle FixedItemPoolT<T>::alloc()
 template<typename T>
 inline void FixedItemPoolT<T>::free(FixedItemHandle item)
 {
-	DORF_ASSERT(item != InvalidFixedItemHandle);
+	ACE_ASSERT(item != InvalidFixedItemHandle);
 	if (item == InvalidFixedItemHandle)
 		return;
 	getPtr(item)->~T();
@@ -111,7 +111,7 @@ inline void FixedItemPoolT<T>::free(FixedItemHandle item)
 template<typename T>
 inline T* FixedItemPoolT<T>::getPtr(FixedItemHandle item)
 {
-	DORF_ASSERT(item != InvalidFixedItemHandle);
+	ACE_ASSERT(item != InvalidFixedItemHandle);
 	if (item == InvalidFixedItemHandle)
 		return nullptr;
 	return static_cast<T*>(getFixedItemPtr(m_pool, item));

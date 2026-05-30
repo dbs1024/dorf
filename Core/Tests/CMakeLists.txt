@@ -1,4 +1,4 @@
 # Copyright (c) Darrin Stewart. All rights reserved.
-add_library(Dorf.Core.Tests SHARED
+add_library(Ace.Core.Tests SHARED
 	UnitTestCore.cpp
 )

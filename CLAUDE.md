@@ -23,7 +23,7 @@ Definitions in a `.cpp` must appear in the same order as their declarations in t
 
 Python-argparse-inspired CLI parser with a C-like public API. Design decisions:
 - Pimpl pattern: `ArgParser` holds `ArgParserImpl*`; all state is in the `.cpp`.
-- Validation uses `DORF_ASSERT` — no error codes.
+- Validation uses `ACE_ASSERT` — no error codes.
 - `ArgParserNumArgs` uses high sentinel values (`0x7fffffff`, etc.) so `ArgDesc::numArgs` can be typed `unsigned`, accepting either a sentinel or a literal count.
 - `ArgParserArgType`, `ArgParserNumArgs`, `ArgParserAction` are all `enum class : unsigned`.
 - `ArgDesc` (public) describes a single argument; `ArgParserDesc` (public) describes the parser.
@@ -32,4 +32,4 @@ Python-argparse-inspired CLI parser with a C-like public API. Design decisions:
   - `numArgs` — copied from `ArgDesc`; Auto resolved by action (Store/Append→1, else→0)
   - `isPositional` — true if name does not start with `"--"`
   - `choices` — direct copy from `ArgDesc`
-- `parseArgs` and `getHelpMessage` are currently stubbed with `DORF_ASSERT(false && "TODO")`.
+- `parseArgs` and `getHelpMessage` are currently stubbed with `ACE_ASSERT(false && "TODO")`.

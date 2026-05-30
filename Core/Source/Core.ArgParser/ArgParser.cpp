@@ -98,8 +98,8 @@ private:
 
 ArgParserImpl::ArgParserImpl(const ArgParserDesc& desc)
 {
-	DORF_ASSERT(desc.argDescCount >= 0);
-	DORF_ASSERT(desc.argDescCount == 0 || desc.argDescs != nullptr);
+	ACE_ASSERT(desc.argDescCount >= 0);
+	ACE_ASSERT(desc.argDescCount == 0 || desc.argDescs != nullptr);
 
 	m_arguments.resize(desc.argDescCount);
 	for (int i = 0; i < desc.argDescCount; ++i)
@@ -134,30 +134,30 @@ ArgParserImpl::ArgParserImpl(const ArgParserDesc& desc)
 				arg.desc.numArgs = 0;
 		}
 
-		DORF_ASSERT(arg.desc.action != ArgParserAction::Store ||
+		ACE_ASSERT(arg.desc.action != ArgParserAction::Store ||
 			arg.desc.numArgs == 1 ||
 			(arg.desc.numArgs == static_cast<unsigned>(ArgParserNumArgs::ZeroOrOne) && isValidString(arg.desc.defaultValue)));
-		DORF_ASSERT(arg.desc.action != ArgParserAction::StoreConst ||
+		ACE_ASSERT(arg.desc.action != ArgParserAction::StoreConst ||
 			(arg.desc.numArgs == 0 && isValidString(arg.desc.constant)));
-		DORF_ASSERT(arg.desc.action != ArgParserAction::StoreTrue ||
+		ACE_ASSERT(arg.desc.action != ArgParserAction::StoreTrue ||
 			(arg.desc.argType == ArgParserArgType::Bool && arg.desc.numArgs == 0));
-		DORF_ASSERT(arg.desc.action != ArgParserAction::StoreFalse ||
+		ACE_ASSERT(arg.desc.action != ArgParserAction::StoreFalse ||
 			(arg.desc.argType == ArgParserArgType::Bool && arg.desc.numArgs == 0));
-		DORF_ASSERT(arg.desc.action != ArgParserAction::Append || arg.desc.numArgs != 0);
-		DORF_ASSERT(arg.desc.action != ArgParserAction::Append ||
+		ACE_ASSERT(arg.desc.action != ArgParserAction::Append || arg.desc.numArgs != 0);
+		ACE_ASSERT(arg.desc.action != ArgParserAction::Append ||
 			!(arg.desc.numArgs == static_cast<unsigned>(ArgParserNumArgs::ZeroOrOne) ||
 			  arg.desc.numArgs == static_cast<unsigned>(ArgParserNumArgs::ZeroOrMore)) ||
 			isValidString(arg.desc.defaultValue));
-		DORF_ASSERT(arg.desc.action != ArgParserAction::AppendConst ||
+		ACE_ASSERT(arg.desc.action != ArgParserAction::AppendConst ||
 			(arg.desc.numArgs == 0 && isValidString(arg.desc.constant)));
-		DORF_ASSERT(arg.desc.action != ArgParserAction::Count ||
+		ACE_ASSERT(arg.desc.action != ArgParserAction::Count ||
 			(arg.desc.argType == ArgParserArgType::Int && arg.desc.numArgs == 0));
-		DORF_ASSERT(!isValidString(arg.desc.constant) || validateType(arg.desc.constant, arg.desc.argType));
-		DORF_ASSERT(!isValidString(arg.desc.defaultValue) || validateType(arg.desc.defaultValue, arg.desc.argType));
-		DORF_ASSERT(arg.desc.name != nullptr);
-		DORF_ASSERT(arg.desc.name[0] != '\0' && arg.desc.name[1] != '\0');
-		DORF_ASSERT(!(arg.desc.name[0] == '-' && arg.desc.name[1] != '-'));
-		DORF_ASSERT(arg.desc.flag == '\0' || (arg.desc.flag >= 'a' && arg.desc.flag <= 'z'));
+		ACE_ASSERT(!isValidString(arg.desc.constant) || validateType(arg.desc.constant, arg.desc.argType));
+		ACE_ASSERT(!isValidString(arg.desc.defaultValue) || validateType(arg.desc.defaultValue, arg.desc.argType));
+		ACE_ASSERT(arg.desc.name != nullptr);
+		ACE_ASSERT(arg.desc.name[0] != '\0' && arg.desc.name[1] != '\0');
+		ACE_ASSERT(!(arg.desc.name[0] == '-' && arg.desc.name[1] != '-'));
+		ACE_ASSERT(arg.desc.flag == '\0' || (arg.desc.flag >= 'a' && arg.desc.flag <= 'z'));
 
 		arg.isPositional  = !(arg.desc.name[0] == '-' && arg.desc.name[1] == '-');
 		arg.desc.required = arg.desc.required || arg.isPositional;
@@ -176,12 +176,12 @@ ArgParser::~ArgParser()
 
 bool ArgParser::parseArgs(int argc, const char* argv[])
 {
-	DORF_ASSERT(false && "TODO");
+	ACE_ASSERT(false && "TODO");
 	return false;
 }
 
 const char* ArgParser::getHelpMessage() const
 {
-	DORF_ASSERT(false && "TODO");
+	ACE_ASSERT(false && "TODO");
 	return nullptr;
 }
