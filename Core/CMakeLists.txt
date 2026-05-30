@@ -2,6 +2,8 @@
 set(HEADERS
 	Include/Core.ArgParser/ArgParser.h
 	Include/Core.Base/Assert.h
+	Include/Core.Math/MathUtil.h
+	Include/Core.Math/Vector3f.h
 	Include/Core.UnitTest/UnitTest.h
 	Include/Core.Util/FixedItemPool.h
 )
