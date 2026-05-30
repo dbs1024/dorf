@@ -63,6 +63,14 @@ public:
 	~ArgParser();
 
 	bool        parseArgs(int argc, const char* argv[]);
+	bool        shouldPrintHelp() const;
+	const char* getErrorMessage() const;
+	// name must be the bare argument name without leading "--" (e.g. "dll", not "--dll").
+	int         getValueCount(const char* name) const;
+	bool        getBoolValue(const char* name, int index = 0) const;
+	int         getIntValue(const char* name, int index = 0) const;
+	float       getFloatValue(const char* name, int index = 0) const;
+	const char* getStringValue(const char* name, int index = 0) const;
 	const char* getHelpMessage() const;
 
 private:

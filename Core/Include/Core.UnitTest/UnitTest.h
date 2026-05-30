@@ -3,48 +3,54 @@
 
 enum class UnitTestResult : unsigned
 {
-    Success = 0,
-    OutOfResources = 1,
-    InvalidArg = 2,
+	Success        = 0,
+	OutOfResources = 1,
+	InvalidArg     = 2,
 };
 
-using UnitTestRunnerHandle = int;
-using UnitTestSuiteHandle  = int;
-using UnitTestHandle       = int;
-using UnitTestFn           = void (*)();
+struct UnitTestContext;
 
-using UnitTestRunnerBeginFn = void (*)(UnitTestRunnerHandle);
-using UnitTestRunnerEndFn   = void (*)(UnitTestRunnerHandle);
-using UnitTestSuiteBeginFn  = void (*)(UnitTestRunnerHandle, UnitTestSuiteHandle);
-using UnitTestSuiteEndFn    = void (*)(UnitTestRunnerHandle, UnitTestSuiteHandle);
-using UnitTestBeginFn       = void (*)(UnitTestRunnerHandle, UnitTestSuiteHandle, UnitTestHandle);
-using UnitTestEndFn         = void (*)(UnitTestRunnerHandle, UnitTestSuiteHandle, UnitTestHandle);
+using UnitTestSuiteHandle = int;
+using UnitTestHandle      = int;
+using UnitTestFn          = void (*)(UnitTestContext*);
+
+using UnitTestSuiteBeginFn  = void (*)(UnitTestSuiteHandle);
+using UnitTestSuiteEndFn    = void (*)(UnitTestSuiteHandle);
+using UnitTestBeginFn       = void (*)(UnitTestSuiteHandle, UnitTestHandle);
+using UnitTestEndFn         = void (*)(UnitTestSuiteHandle, UnitTestHandle);
+using UnitTestAssertFn      = void (*)(UnitTestSuiteHandle, UnitTestHandle, const char* expr, const char* file, int line, int passed);
+using UnitTestExceptionFn   = void (*)(UnitTestSuiteHandle, UnitTestHandle, const char* message);
+using UnitTestCrashFn       = void (*)(UnitTestSuiteHandle, UnitTestHandle, void* exceptionInfo);
 
 struct UnitTestListener
 {
-    UnitTestRunnerBeginFn onRunnerBegin;
-    UnitTestRunnerEndFn   onRunnerEnd;
-    UnitTestSuiteBeginFn  onSuiteBegin;
-    UnitTestSuiteEndFn    onSuiteEnd;
-    UnitTestBeginFn       onTestBegin;
-    UnitTestEndFn         onTestEnd;
+	UnitTestSuiteBeginFn  onSuiteBegin;
+	UnitTestSuiteEndFn    onSuiteEnd;
+	UnitTestBeginFn       onTestBegin;
+	UnitTestEndFn         onTestEnd;
+	UnitTestAssertFn      onTestAssert;
+	UnitTestExceptionFn   onTestException;
+	UnitTestCrashFn       onTestCrash;
 };
 
-constexpr UnitTestRunnerHandle InvalidUnitTestRunnerHandle = -1;
-constexpr UnitTestSuiteHandle  InvalidUnitTestSuiteHandle  = -1;
-constexpr UnitTestHandle       InvalidUnitTestHandle       = -1;
+constexpr UnitTestSuiteHandle InvalidUnitTestSuiteHandle = -1;
+constexpr UnitTestHandle      InvalidUnitTestHandle      = -1;
 
-void setUnitTestListener(const UnitTestListener* listener);
+UnitTestResult createUnitTestContext(UnitTestContext** outCtx);
+void           destroyUnitTestContext(UnitTestContext* ctx);
 
-UnitTestResult createUnitTestRunner(UnitTestRunnerHandle& outHandle, const char* name);
-void           destroyUnitTestRunner(UnitTestRunnerHandle handle);
+void setUnitTestListener(UnitTestContext* ctx, const UnitTestListener* listener);
 
-UnitTestResult createUnitTestSuite(UnitTestSuiteHandle& outHandle, const char* name, UnitTestRunnerHandle runner, UnitTestSuiteHandle parent);
+UnitTestResult createUnitTestSuite(UnitTestSuiteHandle& outHandle, UnitTestContext* ctx, const char* name, UnitTestSuiteHandle parent);
 
-UnitTestResult createUnitTest(UnitTestHandle& outHandle, const char* name, UnitTestFn fn, UnitTestRunnerHandle runner, UnitTestSuiteHandle parent);
+UnitTestResult createUnitTest(UnitTestHandle& outHandle, UnitTestContext* ctx, const char* name, UnitTestFn fn, UnitTestSuiteHandle parent);
 
-UnitTestResult runUnitTests(UnitTestRunnerHandle runner);
+UnitTestResult runUnitTests(UnitTestContext* ctx);
 
-const char* getUnitTestRunnerName(UnitTestRunnerHandle runner);
-const char* getUnitTestSuiteName(UnitTestSuiteHandle suite);
-const char* getUnitTestName(UnitTestHandle test);
+void unitTestExpect(UnitTestContext* ctx, int condition, const char* expr, const char* file, int line);
+
+#define UNIT_TEST_EXPECT(ctx, expr) \
+	unitTestExpect(ctx, (expr) ? 1 : 0, #expr, __FILE__, __LINE__)
+
+const char* getUnitTestSuiteName(UnitTestContext* ctx, UnitTestSuiteHandle suite);
+const char* getUnitTestName(UnitTestContext* ctx, UnitTestHandle test);
