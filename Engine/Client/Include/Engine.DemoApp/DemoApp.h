@@ -7,10 +7,11 @@ enum class DemoAppResult
 {
 	Ok,
 	QuitRequested,
+	Failed,
 };
 
 void createDemoAppContext(DemoAppContext** outCtx);
 void destroyDemoAppContext(DemoAppContext* ctx);
 
-void          createDemoAppWindow(DemoAppContext* ctx, const char* title, int clientWidth, int clientHeight);
+DemoAppResult createDemoAppWindow(DemoAppContext* ctx, const char* title, int clientWidth, int clientHeight);
 DemoAppResult processDemoAppMessages(DemoAppContext* ctx);

@@ -1,12 +1,15 @@
 // Copyright (c) Darrin Stewart. All rights reserved.
 #include "Engine.DemoApp/DemoApp.h"
+#include "Engine.Render/Rhi/RhiDevice.h"
 
+#include <cstdio>
 #include <new>
 #include <windows.h>
 
 struct DemoAppContext
 {
 	HWND hwnd = nullptr;
+	RhiDevice* rhiDevice = nullptr;
 };
 
 void createDemoAppContext(DemoAppContext** outCtx)
@@ -24,6 +27,9 @@ void destroyDemoAppContext(DemoAppContext* ctx)
 {
 	if (!ctx)
 		return;
+	destroyRhiDevice(ctx->rhiDevice);
+	if (ctx->hwnd)
+		DestroyWindow(ctx->hwnd);
 	delete ctx;
 }
 
@@ -38,7 +44,7 @@ static LRESULT CALLBACK wndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
 	return DefWindowProc(hwnd, msg, wParam, lParam);
 }
 
-void createDemoAppWindow(DemoAppContext* ctx, const char* title, int clientWidth, int clientHeight)
+DemoAppResult createDemoAppWindow(DemoAppContext* ctx, const char* title, int clientWidth, int clientHeight)
 {
 	SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
 
@@ -72,8 +78,25 @@ void createDemoAppWindow(DemoAppContext* ctx, const char* title, int clientWidth
 
 	SetWindowLongPtr(ctx->hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(ctx));
 
+	RhiDeviceCreateParams rhiParams;
+	rhiParams.window              = ctx->hwnd;
+	rhiParams.enableDebug         = false;
+	rhiParams.enableGpuValidation = false;
+	rhiParams.maxRenderedFrames   = 2;
+	rhiParams.backbufferWidth     = clientWidth;
+	rhiParams.backbufferHeight    = clientHeight;
+
+	if (createRhiDevice(&ctx->rhiDevice, rhiParams) != RhiError::Ok)
+	{
+		printf("DemoApp: failed to create RhiDevice\n");
+		DestroyWindow(ctx->hwnd);
+		ctx->hwnd = nullptr;
+		return DemoAppResult::Failed;
+	}
+
 	ShowWindow(ctx->hwnd, SW_SHOWDEFAULT);
 	UpdateWindow(ctx->hwnd);
+	return DemoAppResult::Ok;
 }
 
 DemoAppResult processDemoAppMessages(DemoAppContext* ctx)
