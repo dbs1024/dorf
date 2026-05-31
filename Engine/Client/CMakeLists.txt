@@ -6,6 +6,7 @@ set(HEADERS
 
 set(SOURCES
 	Source/Engine.DemoApp/DemoApp.cpp
+	Source/Engine.Render/D3D12/D3D12Device.h
 	Source/Engine.Render/D3D12/D3D12Device.cpp
 )
 

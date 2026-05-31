@@ -1,6 +1,6 @@
 // Copyright (c) Darrin Stewart. All rights reserved.
 #include "Engine.Render/Rhi/RhiDevice.h"
-#include "D3D12Common.h"
+#include "D3D12Device.h"
 
 #include <d3d12.h>
 #include <dxgi1_6.h>
