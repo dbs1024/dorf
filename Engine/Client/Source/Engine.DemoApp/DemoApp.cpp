@@ -80,7 +80,11 @@ DemoAppResult createDemoAppWindow(DemoAppContext* ctx, const char* title, int cl
 
 	RhiDeviceCreateParams rhiParams;
 	rhiParams.window              = ctx->hwnd;
+#ifdef _DEBUG
+	rhiParams.enableDebug         = true;
+#else
 	rhiParams.enableDebug         = false;
+#endif
 	rhiParams.enableGpuValidation = false;
 	rhiParams.maxRenderedFrames   = 2;
 	rhiParams.backbufferWidth     = clientWidth;

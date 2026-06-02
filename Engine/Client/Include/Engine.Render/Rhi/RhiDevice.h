@@ -8,7 +8,7 @@ struct RhiDeviceCreateParams
 	void* window;
 	bool enableDebug;
 	bool enableGpuValidation;
-	int maxRenderedFrames;
+	unsigned maxRenderedFrames;
 	int backbufferWidth;
 	int backbufferHeight;
 };
@@ -17,6 +17,7 @@ enum class RhiError : unsigned
 {
 	Ok,
 	InvalidArg,
+	Failed,
 };
 
 RhiError createRhiDevice(RhiDevice** outDevice, const RhiDeviceCreateParams& params);
