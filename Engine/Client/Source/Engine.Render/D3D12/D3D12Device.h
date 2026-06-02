@@ -2,7 +2,6 @@
 #pragma once
 
 #include "Core.Util/FixedItemPool.h"
-#include "Core.Util/RangePool.h"
 
 #include <d3d12.h>
 #include <dxgi1_4.h>
@@ -11,31 +10,19 @@
 
 enum class RhiError : unsigned;
 
+using RhiDescriptorHandle = int;
+
+constexpr RhiDescriptorHandle InvalidRhiDescriptorHandle = -1;
+
 struct RhiResource
 {
 	Microsoft::WRL::ComPtr<ID3D12Resource> resource;
-	D3D12_RESOURCE_STATES state = D3D12_RESOURCE_STATE_COMMON;
-
-	// TODO: Add an RangePool handle here for descriptor handles. The number and type of
-	// descriptor handles will vary by resource type, and if the resource has subresources.
-	// Use enums for the different resource type descriptors and allocate them in ranges.
-	// E.g.
-	// enum RhiTextureDescriptors
-	// {
-	//    Rtv = 0,
-	//    Dsv,
-	//    Srv,
-	//    Uav,
-	//    Count
-	// }
-	// This could be optimized further depending on what binding flags the user wants.
-	// E.g. if we order by most common then maybe 
+	D3D12_RESOURCE_STATES state     = D3D12_RESOURCE_STATE_COMMON;
+	RhiDescriptorHandle   rtvHandle = InvalidRhiDescriptorHandle;
 };
 
-using RhiResourcePool         = FixedItemPoolT<RhiResource>;
-using RhiResourceHandle       = FixedItemHandle;
-using RhiDescriptorHandle     = int;
-using RhiDescriptorHandlePool = RangePoolT<RhiDescriptorHandle>;
+using RhiResourcePool   = FixedItemPoolT<RhiResource>;
+using RhiResourceHandle = FixedItemHandle;
 
 constexpr unsigned kRhiMaxRenderedFrames    = 4;
 constexpr unsigned kRhiSwapChainImageCount  = 2;
@@ -95,8 +82,7 @@ struct RhiDevice
 	Microsoft::WRL::ComPtr<IDXGISwapChain3> swapChain;
 	unsigned          swapChainImageIndex                          = 0;
 	RhiResourceHandle swapChainImages[kRhiSwapChainImageCount];
-	RhiResourcePool         resourcePool;
-	RhiDescriptorHandlePool descriptorHandlePool;
+	RhiResourcePool   resourcePool;
 };
 
 RhiError createCommandQueue(RhiCommandQueue* outQueue, ID3D12Device_t* device, D3D12_COMMAND_LIST_TYPE type);

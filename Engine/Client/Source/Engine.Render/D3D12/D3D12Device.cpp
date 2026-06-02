@@ -166,6 +166,20 @@ static RhiError initSwapChain(RhiDevice* device, IDXGIFactory7* factory, const R
 
 	device->swapChainImageIndex = device->swapChain->GetCurrentBackBufferIndex();
 
+	for (unsigned i = 0; i < kRhiSwapChainImageCount; ++i)
+	{
+		device->swapChainImages[i] = device->resourcePool.alloc();
+		RhiResource* resource = device->resourcePool.getPtr(device->swapChainImages[i]);
+		hr = device->swapChain->GetBuffer(i, IID_PPV_ARGS(&resource->resource));
+		if (FAILED(hr))
+		{
+			printf("initSwapChain: GetBuffer(%u) failed (hr=0x%08X)\n", i, hr);
+			return RhiError::Failed;
+		}
+		resource->state     = D3D12_RESOURCE_STATE_PRESENT;
+		resource->rtvHandle = allocPersistentDescriptor(&device->cpuRtvHeap);
+	}
+
 	return RhiError::Ok;
 }
 
@@ -177,7 +191,6 @@ RhiError createRhiDevice(RhiDevice** outDevice, const RhiDeviceCreateParams& par
 	RhiDevice* device = new RhiDevice();
 	device->window = params.window;
 	device->resourcePool.init(65536);
-	device->descriptorHandlePool.init(65536);
 	for (unsigned i = 0; i < kRhiSwapChainImageCount; ++i)
 		device->swapChainImages[i] = InvalidFixedItemHandle;
 
@@ -216,8 +229,12 @@ void destroyRhiDevice(RhiDevice* device)
 		return;
 	for (unsigned i = 0; i < kRhiSwapChainImageCount; ++i)
 	{
-		if (device->swapChainImages[i] != InvalidFixedItemHandle)
-			device->resourcePool.free(device->swapChainImages[i]);
+		if (device->swapChainImages[i] == InvalidFixedItemHandle)
+			continue;
+		RhiResource* resource = device->resourcePool.getPtr(device->swapChainImages[i]);
+		if (resource->rtvHandle != InvalidRhiDescriptorHandle)
+			freePersistentDescriptor(&device->cpuRtvHeap, resource->rtvHandle);
+		device->resourcePool.free(device->swapChainImages[i]);
 	}
 	destroyCommandQueue(&device->graphicsQueue);
 	destroyCommandQueue(&device->computeQueue);
