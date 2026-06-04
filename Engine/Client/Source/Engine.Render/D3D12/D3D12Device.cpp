@@ -191,8 +191,8 @@ static RhiError initSwapChain(RhiDevice* device, IDXGIFactory7* factory, const R
 
 	for (unsigned i = 0; i < kRhiSwapChainImageCount; ++i)
 	{
-		device->swapChainImages[i] = device->resourcePool.alloc();
-		RhiResource* resource = device->resourcePool.getPtr(device->swapChainImages[i]);
+		void* ptr = allocFixedItem(device->swapChainImages[i], device->resourcePool);
+		RhiResource* resource = static_cast<RhiResource*>(ptr);
 		hr = device->swapChain->GetBuffer(i, IID_PPV_ARGS(&resource->resource));
 		if (FAILED(hr))
 		{
@@ -213,7 +213,7 @@ RhiError createRhiDevice(RhiDevice** outDevice, const RhiDeviceCreateParams& par
 
 	RhiDevice* device = new RhiDevice();
 	device->window = params.window;
-	device->resourcePool.init(65536);
+	createFixedItemPool(device->resourcePool, sizeof(RhiResource), 65536);
 	for (unsigned i = 0; i < kRhiSwapChainImageCount; ++i)
 		device->swapChainImages[i] = InvalidFixedItemHandle;
 
@@ -260,10 +260,12 @@ void destroyRhiDevice(RhiDevice* device)
 	{
 		if (device->swapChainImages[i] == InvalidFixedItemHandle)
 			continue;
-		RhiResource* resource = device->resourcePool.getPtr(device->swapChainImages[i]);
+		RhiResource* resource = static_cast<RhiResource*>(getFixedItemPtr(device->resourcePool, device->swapChainImages[i]));
 		if (resource->rtvHandle != InvalidRhiDescriptorHandle)
 			freePersistentDescriptor(&device->cpuRtvHeap, resource->rtvHandle);
-		device->resourcePool.free(device->swapChainImages[i]);
+		if (resource->resource)
+			resource->resource->Release();
+		freeFixedItem(device->resourcePool, device->swapChainImages[i]);
 	}
 	for (unsigned i = 0; i < kRhiMaxRenderedFrames; ++i)
 	{
@@ -278,5 +280,21 @@ void destroyRhiDevice(RhiDevice* device)
 	destroyDescriptorHeap(&device->cpuDsvHeap);
 	destroyDescriptorHeap(&device->gpuCbvSrvUavHeap);
 	destroyDescriptorHeap(&device->gpuSamplerHeap);
+	destroyFixedItemPool(device->resourcePool);
 	delete device;
+}
+
+RhiResource* allocResource(RhiResourceHandle* outHandle, RhiDevice* device)
+{
+	void* ptr = allocFixedItem(*outHandle, device->resourcePool);
+	if (!ptr)
+		return nullptr;
+	RhiResource* resource = static_cast<RhiResource*>(ptr);
+	memset(resource, 0, sizeof(RhiResource));
+	return resource;
+}
+
+void freeResource(RhiDevice* device, RhiResourceHandle handle)
+{
+	freeFixedItem(device->resourcePool, handle);
 }

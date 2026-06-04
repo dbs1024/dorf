@@ -44,11 +44,11 @@ void destroyDescriptorHeap(RhiDescriptorHeap* heap)
 RhiDescriptorHandle allocPersistentDescriptor(RhiDescriptorHeap* heap)
 {
 	ACE_ASSERT(heap->persistentFreeCount > 0);
-	return heap->persistentFreeList[--heap->persistentFreeCount];
+	return heap->persistentFreeList[--heap->persistentFreeCount] + 1;
 }
 
 void freePersistentDescriptor(RhiDescriptorHeap* heap, RhiDescriptorHandle index)
 {
-	ACE_ASSERT(index >= 0 && static_cast<unsigned>(index) < heap->persistentDescriptorCount);
-	heap->persistentFreeList[heap->persistentFreeCount++] = index;
+	ACE_ASSERT(index > 0 && static_cast<unsigned>(index) <= heap->persistentDescriptorCount);
+	heap->persistentFreeList[heap->persistentFreeCount++] = index - 1;
 }

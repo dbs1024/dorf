@@ -75,24 +75,30 @@ void destroyFixedItemPool(FixedItemPoolHandle pool)
 	::operator delete(p, std::align_val_t(static_cast<size_t>(p->alignment)));
 }
 
-FixedItemPoolResult allocFixedItem(FixedItemHandle& outItem, FixedItemPoolHandle pool)
+void* allocFixedItem(FixedItemHandle& outItem, FixedItemPoolHandle pool)
 {
+	ACE_ASSERT(pool != nullptr);
 	if (!pool)
 	{
 		outItem = InvalidFixedItemHandle;
-		return FixedItemPoolResult::InvalidArg;
+		return nullptr;
 	}
 
 	FixedItemPool* p = static_cast<FixedItemPool*>(pool);
+	ACE_ASSERT(p->freeCount > 0);
 	if (p->freeCount == 0)
 	{
 		outItem = InvalidFixedItemHandle;
-		return FixedItemPoolResult::OutOfResources;
+		return nullptr;
 	}
 
 	int* freeStack = getFreeStack(p);
-	outItem = freeStack[--p->freeCount];
-	return FixedItemPoolResult::Success;
+	outItem = freeStack[--p->freeCount] + 1;
+	char* itemPtr = getItems(p) + (outItem - 1) * p->itemStride;
+#ifdef _DEBUG
+	memset(itemPtr, 0xFA, p->itemStride);
+#endif
+	return itemPtr;
 }
 
 void freeFixedItem(FixedItemPoolHandle pool, FixedItemHandle item)
@@ -101,11 +107,15 @@ void freeFixedItem(FixedItemPoolHandle pool, FixedItemHandle item)
 		return;
 
 	FixedItemPool* p = static_cast<FixedItemPool*>(pool);
-	if (item < 0 || item >= p->maxItems)
+	if (item <= 0 || item > p->maxItems)
 		return;
 
+	int idx = item - 1;
+#ifdef _DEBUG
+	memset(getItems(p) + idx * p->itemStride, 0xFD, p->itemStride);
+#endif
 	int* freeStack = getFreeStack(p);
-	freeStack[p->freeCount++] = item;
+	freeStack[p->freeCount++] = idx;
 }
 
 void* getFixedItemPtr(FixedItemPoolHandle pool, FixedItemHandle item)
@@ -114,10 +124,10 @@ void* getFixedItemPtr(FixedItemPoolHandle pool, FixedItemHandle item)
 		return nullptr;
 
 	FixedItemPool* p = static_cast<FixedItemPool*>(pool);
-	if (item < 0 || item >= p->maxItems)
+	if (item <= 0 || item > p->maxItems)
 		return nullptr;
 
-	return getItems(p) + item * p->itemStride;
+	return getItems(p) + (item - 1) * p->itemStride;
 }
 
 int getFixedItemCount(FixedItemPoolHandle pool)

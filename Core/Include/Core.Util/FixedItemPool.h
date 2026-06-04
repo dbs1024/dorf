@@ -16,12 +16,12 @@ using FixedItemPoolHandle = void*;
 using FixedItemHandle     = int;
 
 constexpr FixedItemPoolHandle InvalidFixedItemPoolHandle = nullptr;
-constexpr FixedItemHandle     InvalidFixedItemHandle     = -1;
+constexpr FixedItemHandle     InvalidFixedItemHandle     = 0;
 
 FixedItemPoolResult createFixedItemPool(FixedItemPoolHandle& outPool, size_t itemSize, int maxItems, size_t alignment = 16);
 void                destroyFixedItemPool(FixedItemPoolHandle pool);
 
-FixedItemPoolResult allocFixedItem(FixedItemHandle& outItem, FixedItemPoolHandle pool);
+void*               allocFixedItem(FixedItemHandle& outItem, FixedItemPoolHandle pool);
 void                freeFixedItem(FixedItemPoolHandle pool, FixedItemHandle item);
 
 void*               getFixedItemPtr(FixedItemPoolHandle pool, FixedItemHandle item);
@@ -90,11 +90,10 @@ template<typename T>
 inline FixedItemHandle FixedItemPoolT<T>::alloc()
 {
 	FixedItemHandle item;
-	FixedItemPoolResult result = allocFixedItem(item, m_pool);
-	ACE_ASSERT(result == FixedItemPoolResult::Success);
-	if (result != FixedItemPoolResult::Success)
+	void* ptr = allocFixedItem(item, m_pool);
+	if (!ptr)
 		return InvalidFixedItemHandle;
-	::new (getPtr(item)) T;
+	::new (ptr) T;
 	return item;
 }
 

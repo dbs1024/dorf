@@ -7,21 +7,23 @@
 #include <dxgi1_4.h>
 #include <wrl/client.h>
 #include <cstdint>
+#include <type_traits>
 
 enum class RhiError : unsigned;
 
 using RhiDescriptorHandle = int;
 
-constexpr RhiDescriptorHandle InvalidRhiDescriptorHandle = -1;
+constexpr RhiDescriptorHandle InvalidRhiDescriptorHandle = 0;
 
 struct RhiResource
 {
-	Microsoft::WRL::ComPtr<ID3D12Resource> resource;
-	D3D12_RESOURCE_STATES state     = D3D12_RESOURCE_STATE_COMMON;
-	RhiDescriptorHandle   rtvHandle = InvalidRhiDescriptorHandle;
+	ID3D12Resource*     resource;
+	D3D12_RESOURCE_STATES state;
+	RhiDescriptorHandle rtvHandle;
 };
 
-using RhiResourcePool   = FixedItemPoolT<RhiResource>;
+static_assert(std::is_trivially_default_constructible_v<RhiResource> && std::is_trivially_destructible_v<RhiResource>);
+
 using RhiResourceHandle = FixedItemHandle;
 
 constexpr unsigned kRhiMaxRenderedFrames    = 4;
@@ -84,7 +86,7 @@ struct RhiDevice
 	Microsoft::WRL::ComPtr<IDXGISwapChain3> swapChain;
 	unsigned          swapChainImageIndex                          = 0;
 	RhiResourceHandle swapChainImages[kRhiSwapChainImageCount];
-	RhiResourcePool   resourcePool;
+	FixedItemPoolHandle resourcePool = InvalidFixedItemPoolHandle;
 };
 
 RhiError createCommandQueue(RhiCommandQueue* outQueue, ID3D12Device_t* device, D3D12_COMMAND_LIST_TYPE type);
@@ -95,3 +97,6 @@ void     destroyDescriptorHeap(RhiDescriptorHeap* heap);
 
 RhiDescriptorHandle allocPersistentDescriptor(RhiDescriptorHeap* heap);
 void                freePersistentDescriptor(RhiDescriptorHeap* heap, RhiDescriptorHandle index);
+
+RhiResource* allocResource(RhiResourceHandle* outHandle, RhiDevice* device);
+void         freeResource(RhiDevice* device, RhiResourceHandle handle);
