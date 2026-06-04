@@ -79,6 +79,8 @@ struct RhiDevice
 	RhiDescriptorHeap cpuDsvHeap;
 	RhiDescriptorHeap gpuCbvSrvUavHeap;
 	RhiDescriptorHeap gpuSamplerHeap;
+	Microsoft::WRL::ComPtr<ID3D12Fence> frameFence;
+	HANDLE                              frameFenceEvents[kRhiMaxRenderedFrames] = {};
 	Microsoft::WRL::ComPtr<IDXGISwapChain3> swapChain;
 	unsigned          swapChainImageIndex                          = 0;
 	RhiResourceHandle swapChainImages[kRhiSwapChainImageCount];

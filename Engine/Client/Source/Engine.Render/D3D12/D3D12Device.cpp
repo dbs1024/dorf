@@ -130,6 +130,29 @@ static RhiError initDescriptorHeaps(RhiDevice* device)
 }
 
 // Helper precedes caller — no forward declaration.
+static RhiError initFences(RhiDevice* device, const RhiDeviceCreateParams& params)
+{
+	HRESULT hr = device->d3dDevice->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&device->frameFence));
+	if (FAILED(hr))
+	{
+		printf("initFences: CreateFence failed (hr=0x%08X)\n", hr);
+		return RhiError::Failed;
+	}
+
+	for (unsigned i = 0; i < params.maxRenderedFrames; ++i)
+	{
+		device->frameFenceEvents[i] = CreateEvent(nullptr, FALSE, FALSE, nullptr);
+		if (!device->frameFenceEvents[i])
+		{
+			printf("initFences: CreateEvent(%u) failed\n", i);
+			return RhiError::Failed;
+		}
+	}
+
+	return RhiError::Ok;
+}
+
+// Helper precedes caller — no forward declaration.
 static RhiError initSwapChain(RhiDevice* device, IDXGIFactory7* factory, const RhiDeviceCreateParams& params)
 {
 	DXGI_SWAP_CHAIN_DESC1 desc = {};
@@ -213,6 +236,12 @@ RhiError createRhiDevice(RhiDevice** outDevice, const RhiDeviceCreateParams& par
 		return RhiError::Failed;
 	}
 
+	if (initFences(device, params) != RhiError::Ok)
+	{
+		destroyRhiDevice(device);
+		return RhiError::Failed;
+	}
+
 	if (initSwapChain(device, factory.Get(), params) != RhiError::Ok)
 	{
 		destroyRhiDevice(device);
@@ -235,6 +264,11 @@ void destroyRhiDevice(RhiDevice* device)
 		if (resource->rtvHandle != InvalidRhiDescriptorHandle)
 			freePersistentDescriptor(&device->cpuRtvHeap, resource->rtvHandle);
 		device->resourcePool.free(device->swapChainImages[i]);
+	}
+	for (unsigned i = 0; i < kRhiMaxRenderedFrames; ++i)
+	{
+		if (device->frameFenceEvents[i])
+			CloseHandle(device->frameFenceEvents[i]);
 	}
 	destroyCommandQueue(&device->graphicsQueue);
 	destroyCommandQueue(&device->computeQueue);
