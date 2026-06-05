@@ -1,5 +1,6 @@
 // Copyright (c) Darrin Stewart. All rights reserved.
 #include "Engine.DemoApp/DemoApp.h"
+#include "Engine.Input/InputManager.h"
 #include "Engine.Render/Rhi/RhiDevice.h"
 
 #include <cstdio>
@@ -10,6 +11,7 @@ struct DemoAppContext
 {
 	HWND hwnd = nullptr;
 	RhiDevice* rhiDevice = nullptr;
+	InputManager* inputManager = nullptr;
 };
 
 void createDemoAppContext(DemoAppContext** outCtx)
@@ -27,6 +29,7 @@ void destroyDemoAppContext(DemoAppContext* ctx)
 {
 	if (!ctx)
 		return;
+	destroyInputManager(ctx->inputManager);
 	destroyRhiDevice(ctx->rhiDevice);
 	if (ctx->hwnd)
 		DestroyWindow(ctx->hwnd);
@@ -100,18 +103,35 @@ DemoAppResult createDemoAppWindow(DemoAppContext* ctx, const char* title, int cl
 
 	ShowWindow(ctx->hwnd, SW_SHOWDEFAULT);
 	UpdateWindow(ctx->hwnd);
+
+	InputManagerCreateParams inputParams;
+	inputParams.window = ctx->hwnd;
+	if (createInputManager(&ctx->inputManager, inputParams) != InputManagerError::Ok)
+	{
+		printf("DemoApp: failed to create InputManager\n");
+		return DemoAppResult::Failed;
+	}
+
 	return DemoAppResult::Ok;
 }
 
-DemoAppResult processDemoAppMessages(DemoAppContext* ctx)
+DemoAppResult updateDemoApp(DemoAppContext* ctx)
 {
 	MSG msg = {};
-	while (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE))
+	while (PeekMessage(&msg, nullptr, 0, WM_INPUT - 1, PM_REMOVE) ||
+		   PeekMessage(&msg, nullptr, WM_INPUT + 1, 0xFFFF, PM_REMOVE))
 	{
 		if (msg.message == WM_QUIT)
 			return DemoAppResult::QuitRequested;
 		TranslateMessage(&msg);
 		DispatchMessage(&msg);
 	}
+
+	updateInputManager(ctx->inputManager);
 	return DemoAppResult::Ok;
+}
+
+InputManager* getDemoAppInputManager(DemoAppContext* ctx)
+{
+	return ctx ? ctx->inputManager : nullptr;
 }

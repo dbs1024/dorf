@@ -1,11 +1,13 @@
 # Copyright (c) Darrin Stewart. All rights reserved.
 set(HEADERS
 	Include/Engine.DemoApp/DemoApp.h
+	Include/Engine.Input/InputManager.h
 	Include/Engine.Render/Rhi/RhiDevice.h
 )
 
 set(SOURCES
 	Source/Engine.DemoApp/DemoApp.cpp
+	Source/Engine.Input/InputManager.cpp
 	Source/Engine.Render/D3D12/D3D12Device.h
 	Source/Engine.Render/D3D12/D3D12Device.cpp
 	Source/Engine.Render/D3D12/D3D12CommandQueue.cpp

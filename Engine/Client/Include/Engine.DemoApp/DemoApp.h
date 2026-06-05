@@ -2,6 +2,7 @@
 #pragma once
 
 struct DemoAppContext;
+struct InputManager;
 
 enum class DemoAppResult
 {
@@ -13,5 +14,6 @@ enum class DemoAppResult
 void createDemoAppContext(DemoAppContext** outCtx);
 void destroyDemoAppContext(DemoAppContext* ctx);
 
-DemoAppResult createDemoAppWindow(DemoAppContext* ctx, const char* title, int clientWidth, int clientHeight);
-DemoAppResult processDemoAppMessages(DemoAppContext* ctx);
+DemoAppResult  createDemoAppWindow(DemoAppContext* ctx, const char* title, int clientWidth, int clientHeight);
+DemoAppResult  updateDemoApp(DemoAppContext* ctx);
+InputManager*  getDemoAppInputManager(DemoAppContext* ctx);
