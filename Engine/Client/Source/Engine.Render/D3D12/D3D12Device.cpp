@@ -4,6 +4,7 @@
 
 #include <d3d12.h>
 #include <dxgi1_6.h>
+#include <wrl/client.h>
 #include <cstdio>
 
 using Microsoft::WRL::ComPtr;
@@ -94,10 +95,10 @@ static ComPtr<IDXGIFactory7> initD3dDevice(RhiDevice* device, const RhiDeviceCre
 // Helper precedes caller — no forward declaration.
 static RhiError initCommandQueues(RhiDevice* device)
 {
-	if (createCommandQueue(&device->graphicsQueue, device->d3dDevice.Get(), D3D12_COMMAND_LIST_TYPE_DIRECT) != RhiError::Ok)
+	if (createCommandQueue(device->graphicsQueue, device->d3dDevice, D3D12_COMMAND_LIST_TYPE_DIRECT) != RhiError::Ok)
 		return RhiError::Failed;
 
-	if (createCommandQueue(&device->computeQueue, device->d3dDevice.Get(), D3D12_COMMAND_LIST_TYPE_COMPUTE) != RhiError::Ok)
+	if (createCommandQueue(device->computeQueue, device->d3dDevice, D3D12_COMMAND_LIST_TYPE_COMPUTE) != RhiError::Ok)
 		return RhiError::Failed;
 
 	return RhiError::Ok;
@@ -106,24 +107,24 @@ static RhiError initCommandQueues(RhiDevice* device)
 // Helper precedes caller — no forward declaration.
 static RhiError initDescriptorHeaps(RhiDevice* device)
 {
-	ID3D12Device_t* d3d = device->d3dDevice.Get();
+	ID3D12Device_t* d3d = device->d3dDevice;
 
-	if (createDescriptorHeap(&device->cpuCbvSrvUavHeap, d3d, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 1024, false) != RhiError::Ok)
+	if (createDescriptorHeap(device->cpuCbvSrvUavHeap, d3d, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 1024, false) != RhiError::Ok)
 		return RhiError::Failed;
 
-	if (createDescriptorHeap(&device->cpuSamplerHeap, d3d, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, 1024, false) != RhiError::Ok)
+	if (createDescriptorHeap(device->cpuSamplerHeap, d3d, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, 1024, false) != RhiError::Ok)
 		return RhiError::Failed;
 
-	if (createDescriptorHeap(&device->cpuRtvHeap, d3d, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, 1024, false) != RhiError::Ok)
+	if (createDescriptorHeap(device->cpuRtvHeap, d3d, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, 1024, false) != RhiError::Ok)
 		return RhiError::Failed;
 
-	if (createDescriptorHeap(&device->cpuDsvHeap, d3d, D3D12_DESCRIPTOR_HEAP_TYPE_DSV, 1024, false) != RhiError::Ok)
+	if (createDescriptorHeap(device->cpuDsvHeap, d3d, D3D12_DESCRIPTOR_HEAP_TYPE_DSV, 1024, false) != RhiError::Ok)
 		return RhiError::Failed;
 
-	if (createDescriptorHeap(&device->gpuCbvSrvUavHeap, d3d, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 1024, true) != RhiError::Ok)
+	if (createDescriptorHeap(device->gpuCbvSrvUavHeap, d3d, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 1024, true) != RhiError::Ok)
 		return RhiError::Failed;
 
-	if (createDescriptorHeap(&device->gpuSamplerHeap, d3d, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, 1024, true) != RhiError::Ok)
+	if (createDescriptorHeap(device->gpuSamplerHeap, d3d, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, 1024, true) != RhiError::Ok)
 		return RhiError::Failed;
 
 	return RhiError::Ok;
@@ -166,7 +167,7 @@ static RhiError initSwapChain(RhiDevice* device, IDXGIFactory7* factory, const R
 
 	ComPtr<IDXGISwapChain1> swapChain1;
 	HRESULT hr = factory->CreateSwapChainForHwnd(
-		device->graphicsQueue.queue.Get(),
+		device->graphicsQueue.queue,
 		static_cast<HWND>(device->window),
 		&desc,
 		nullptr,
@@ -180,7 +181,7 @@ static RhiError initSwapChain(RhiDevice* device, IDXGIFactory7* factory, const R
 
 	factory->MakeWindowAssociation(static_cast<HWND>(device->window), DXGI_MWA_NO_ALT_ENTER);
 
-	hr = swapChain1.As(&device->swapChain);
+	hr = swapChain1->QueryInterface(IID_PPV_ARGS(&device->swapChain));
 	if (FAILED(hr))
 	{
 		printf("initSwapChain: QueryInterface for IDXGISwapChain3 failed (hr=0x%08X)\n", hr);
@@ -211,7 +212,8 @@ RhiError createRhiDevice(RhiDevice** outDevice, const RhiDeviceCreateParams& par
 	if (params.maxRenderedFrames > kRhiMaxRenderedFrames)
 		return RhiError::InvalidArg;
 
-	RhiDevice* device = new RhiDevice();
+	RhiDevice* device = new RhiDevice;
+	memset(device, 0, sizeof(*device));
 	device->window = params.window;
 	createFixedItemPool(device->resourcePool, sizeof(RhiResource), 65536);
 	for (unsigned i = 0; i < kRhiSwapChainImageCount; ++i)
@@ -261,16 +263,25 @@ void destroyRhiDevice(RhiDevice* device)
 		if (device->swapChainImages[i] == InvalidFixedItemHandle)
 			continue;
 		RhiResource* resource = static_cast<RhiResource*>(getFixedItemPtr(device->resourcePool, device->swapChainImages[i]));
-		if (resource->rtvHandle != InvalidRhiDescriptorHandle)
-			freePersistentDescriptor(&device->cpuRtvHeap, resource->rtvHandle);
+		freePersistentDescriptor(&device->cpuRtvHeap, resource->rtvHandle);
 		if (resource->resource)
 			resource->resource->Release();
 		freeFixedItem(device->resourcePool, device->swapChainImages[i]);
+	}
+	if (device->swapChain)
+	{
+		device->swapChain->Release();
+		device->swapChain = nullptr;
 	}
 	for (unsigned i = 0; i < kRhiMaxRenderedFrames; ++i)
 	{
 		if (device->frameFenceEvents[i])
 			CloseHandle(device->frameFenceEvents[i]);
+	}
+	if (device->frameFence)
+	{
+		device->frameFence->Release();
+		device->frameFence = nullptr;
 	}
 	destroyCommandQueue(&device->graphicsQueue);
 	destroyCommandQueue(&device->computeQueue);
@@ -281,12 +292,17 @@ void destroyRhiDevice(RhiDevice* device)
 	destroyDescriptorHeap(&device->gpuCbvSrvUavHeap);
 	destroyDescriptorHeap(&device->gpuSamplerHeap);
 	destroyFixedItemPool(device->resourcePool);
+	if (device->d3dDevice)
+	{
+		device->d3dDevice->Release();
+		device->d3dDevice = nullptr;
+	}
 	delete device;
 }
 
-RhiResource* allocResource(RhiResourceHandle* outHandle, RhiDevice* device)
+RhiResource* allocResource(RhiResourceHandle& outHandle, RhiDevice* device)
 {
-	void* ptr = allocFixedItem(*outHandle, device->resourcePool);
+	void* ptr = allocFixedItem(outHandle, device->resourcePool);
 	if (!ptr)
 		return nullptr;
 	RhiResource* resource = static_cast<RhiResource*>(ptr);
