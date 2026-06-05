@@ -1,5 +1,6 @@
 // Copyright (c) Darrin Stewart. All rights reserved.
 #include "Engine.DemoApp/DemoApp.h"
+#include "Engine.Input/InputManager.h"
 
 int main()
 {
@@ -7,8 +8,11 @@ int main()
 	createDemoAppContext(&ctx);
 	createDemoAppWindow(ctx, "BasicDraw", 1920, 1080);
 
-	while (processDemoAppMessages(ctx) != DemoAppResult::QuitRequested)
+	while (updateDemoApp(ctx) == DemoAppResult::Ok)
 	{
+		if (wasKeyboardButtonPressed(getDemoAppInputManager(ctx), KeyboardButton::KB_Escape))
+			break;
+
 		// TODO: rendering
 	}
 

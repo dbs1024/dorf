@@ -33,8 +33,8 @@ struct UnitTestListener
 	UnitTestCrashFn       onTestCrash;
 };
 
-constexpr UnitTestSuiteHandle InvalidUnitTestSuiteHandle = -1;
-constexpr UnitTestHandle      InvalidUnitTestHandle      = -1;
+constexpr UnitTestSuiteHandle InvalidUnitTestSuiteHandle = 0;
+constexpr UnitTestHandle      InvalidUnitTestHandle      = 0;
 
 UnitTestResult createUnitTestContext(UnitTestContext** outCtx);
 void           destroyUnitTestContext(UnitTestContext* ctx);

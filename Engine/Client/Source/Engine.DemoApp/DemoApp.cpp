@@ -9,19 +9,20 @@
 
 struct DemoAppContext
 {
-	HWND hwnd = nullptr;
-	RhiDevice* rhiDevice = nullptr;
-	InputManager* inputManager = nullptr;
+	HWND hwnd;
+	RhiDevice* rhiDevice;
+	InputManager* inputManager;
 };
 
 void createDemoAppContext(DemoAppContext** outCtx)
 {
-	DemoAppContext* ctx = new (std::nothrow) DemoAppContext{};
+	DemoAppContext* ctx = new (std::nothrow) DemoAppContext;
 	if (!ctx)
 	{
 		*outCtx = nullptr;
 		return;
 	}
+	memset(ctx, 0, sizeof(*ctx));
 	*outCtx = ctx;
 }
 

@@ -46,20 +46,20 @@ namespace
 
 struct UnitTestContext
 {
-	ChildRef                      firstChild    = { NodeType::None, 0 };
-	ChildRef                      lastChild     = { NodeType::None, 0 };
-	FixedItemPoolT<UnitTestSuite> suitePool;
-	FixedItemPoolT<UnitTest>      testPool;
-	const UnitTestListener*       listener      = nullptr;
-	UnitTestSuiteHandle           currentSuite  = InvalidUnitTestSuiteHandle;
-	UnitTestHandle                currentTest   = InvalidUnitTestHandle;
+	ChildRef                firstChild;
+	ChildRef                lastChild;
+	FixedItemPoolHandle     suitePool;
+	FixedItemPoolHandle     testPool;
+	const UnitTestListener* listener;
+	UnitTestSuiteHandle     currentSuite;
+	UnitTestHandle          currentTest;
 };
 
 static ChildRef& getNextSiblingRef(UnitTestContext* ctx, ChildRef ref)
 {
 	if (ref.type == NodeType::Suite)
-		return ctx->suitePool.getPtr(ref.handle)->nextSibling;
-	return ctx->testPool.getPtr(ref.handle)->nextSibling;
+		return static_cast<UnitTestSuite*>(getFixedItemPtr(ctx->suitePool, ref.handle))->nextSibling;
+	return static_cast<UnitTest*>(getFixedItemPtr(ctx->testPool, ref.handle))->nextSibling;
 }
 
 static void appendChildTo(UnitTestContext* ctx, ChildRef& firstChild, ChildRef& lastChild, ChildRef newRef)
@@ -79,16 +79,16 @@ static void freeChildren(UnitTestContext* ctx, ChildRef first)
 		ChildRef next = getNextSiblingRef(ctx, current);
 		if (current.type == NodeType::Suite)
 		{
-			UnitTestSuite* suite = ctx->suitePool.getPtr(current.handle);
+			UnitTestSuite* suite = static_cast<UnitTestSuite*>(getFixedItemPtr(ctx->suitePool, current.handle));
 			ChildRef childFirst  = suite->firstChild;
 			suite->inUse         = false;
-			ctx->suitePool.free(current.handle);
+			freeFixedItem(ctx->suitePool, current.handle);
 			freeChildren(ctx, childFirst);
 		}
 		else
 		{
-			ctx->testPool.getPtr(current.handle)->inUse = false;
-			ctx->testPool.free(current.handle);
+			static_cast<UnitTest*>(getFixedItemPtr(ctx->testPool, current.handle))->inUse = false;
+			freeFixedItem(ctx->testPool, current.handle);
 		}
 		current = next;
 	}
@@ -127,7 +127,7 @@ static void runNode(UnitTestContext* ctx, ChildRef ref, UnitTestSuiteHandle suit
 {
 	if (ref.type == NodeType::Suite)
 	{
-		UnitTestSuite* suite = ctx->suitePool.getPtr(ref.handle);
+		UnitTestSuite* suite = static_cast<UnitTestSuite*>(getFixedItemPtr(ctx->suitePool, ref.handle));
 		if (ctx->listener && ctx->listener->onSuiteBegin)
 			ctx->listener->onSuiteBegin(ref.handle);
 		runChildren(ctx, suite->firstChild, ref.handle);
@@ -136,7 +136,7 @@ static void runNode(UnitTestContext* ctx, ChildRef ref, UnitTestSuiteHandle suit
 	}
 	else
 	{
-		UnitTest* test = ctx->testPool.getPtr(ref.handle);
+		UnitTest* test = static_cast<UnitTest*>(getFixedItemPtr(ctx->testPool, ref.handle));
 		if (ctx->listener && ctx->listener->onTestBegin)
 			ctx->listener->onTestBegin(suiteHandle, ref.handle);
 		ctx->currentSuite = suiteHandle;
@@ -174,14 +174,15 @@ static void runChildren(UnitTestContext* ctx, ChildRef current, UnitTestSuiteHan
 
 UnitTestResult createUnitTestContext(UnitTestContext** outCtx)
 {
-	UnitTestContext* ctx = new (std::nothrow) UnitTestContext{};
+	UnitTestContext* ctx = new (std::nothrow) UnitTestContext;
 	if (!ctx)
 	{
 		*outCtx = nullptr;
 		return UnitTestResult::OutOfResources;
 	}
-	ctx->suitePool.init(MaxUnitTestSuites);
-	ctx->testPool.init(MaxUnitTestTests);
+	memset(ctx, 0, sizeof(*ctx));
+	createFixedItemPool(ctx->suitePool, sizeof(UnitTestSuite), MaxUnitTestSuites);
+	createFixedItemPool(ctx->testPool, sizeof(UnitTest), MaxUnitTestTests);
 	*outCtx = ctx;
 	return UnitTestResult::Success;
 }
@@ -190,8 +191,8 @@ void destroyUnitTestContext(UnitTestContext* ctx)
 {
 	if (!ctx)
 		return;
-	ctx->suitePool.destroy();
-	ctx->testPool.destroy();
+	destroyFixedItemPool(ctx->suitePool);
+	destroyFixedItemPool(ctx->testPool);
 	delete ctx;
 }
 
@@ -202,14 +203,14 @@ void setUnitTestListener(UnitTestContext* ctx, const UnitTestListener* listener)
 
 UnitTestResult createUnitTestSuite(UnitTestSuiteHandle& outHandle, UnitTestContext* ctx, const char* name, UnitTestSuiteHandle parent)
 {
-	UnitTestSuiteHandle slot = ctx->suitePool.alloc();
-	if (slot == InvalidFixedItemHandle)
+	FixedItemHandle slot;
+	UnitTestSuite*  suite = static_cast<UnitTestSuite*>(allocFixedItem(slot, ctx->suitePool));
+	if (!suite)
 	{
 		outHandle = InvalidUnitTestSuiteHandle;
 		return UnitTestResult::OutOfResources;
 	}
 
-	UnitTestSuite* suite = ctx->suitePool.getPtr(slot);
 	suite->inUse         = true;
 	suite->name          = name;
 	suite->parent        = parent;
@@ -222,7 +223,10 @@ UnitTestResult createUnitTestSuite(UnitTestSuiteHandle& outHandle, UnitTestConte
 	if (parent == InvalidUnitTestSuiteHandle)
 		appendChildTo(ctx, ctx->firstChild, ctx->lastChild, newRef);
 	else
-		appendChildTo(ctx, ctx->suitePool.getPtr(parent)->firstChild, ctx->suitePool.getPtr(parent)->lastChild, newRef);
+	{
+		UnitTestSuite* parentSuite = static_cast<UnitTestSuite*>(getFixedItemPtr(ctx->suitePool, parent));
+		appendChildTo(ctx, parentSuite->firstChild, parentSuite->lastChild, newRef);
+	}
 
 	outHandle = slot;
 	return UnitTestResult::Success;
@@ -230,14 +234,14 @@ UnitTestResult createUnitTestSuite(UnitTestSuiteHandle& outHandle, UnitTestConte
 
 UnitTestResult createUnitTest(UnitTestHandle& outHandle, UnitTestContext* ctx, const char* name, UnitTestFn fn, UnitTestSuiteHandle parent)
 {
-	UnitTestHandle slot = ctx->testPool.alloc();
-	if (slot == InvalidFixedItemHandle)
+	FixedItemHandle slot;
+	UnitTest*       test = static_cast<UnitTest*>(allocFixedItem(slot, ctx->testPool));
+	if (!test)
 	{
 		outHandle = InvalidUnitTestHandle;
 		return UnitTestResult::OutOfResources;
 	}
 
-	UnitTest* test    = ctx->testPool.getPtr(slot);
 	test->inUse       = true;
 	test->name        = name;
 	test->fn          = fn;
@@ -249,7 +253,10 @@ UnitTestResult createUnitTest(UnitTestHandle& outHandle, UnitTestContext* ctx, c
 	if (parent == InvalidUnitTestSuiteHandle)
 		appendChildTo(ctx, ctx->firstChild, ctx->lastChild, newRef);
 	else
-		appendChildTo(ctx, ctx->suitePool.getPtr(parent)->firstChild, ctx->suitePool.getPtr(parent)->lastChild, newRef);
+	{
+		UnitTestSuite* parentSuite = static_cast<UnitTestSuite*>(getFixedItemPtr(ctx->suitePool, parent));
+		appendChildTo(ctx, parentSuite->firstChild, parentSuite->lastChild, newRef);
+	}
 
 	outHandle = slot;
 	return UnitTestResult::Success;
@@ -270,16 +277,16 @@ void unitTestExpect(UnitTestContext* ctx, int condition, const char* expr, const
 
 const char* getUnitTestSuiteName(UnitTestContext* ctx, UnitTestSuiteHandle suite)
 {
-	if (suite < 0 || suite >= MaxUnitTestSuites)
+	if (suite <= 0 || suite > MaxUnitTestSuites)
 		return nullptr;
-	UnitTestSuite* s = ctx->suitePool.getPtr(suite);
+	UnitTestSuite* s = static_cast<UnitTestSuite*>(getFixedItemPtr(ctx->suitePool, suite));
 	return s->inUse ? s->name : nullptr;
 }
 
 const char* getUnitTestName(UnitTestContext* ctx, UnitTestHandle test)
 {
-	if (test < 0 || test >= MaxUnitTestTests)
+	if (test <= 0 || test > MaxUnitTestTests)
 		return nullptr;
-	UnitTest* t = ctx->testPool.getPtr(test);
+	UnitTest* t = static_cast<UnitTest*>(getFixedItemPtr(ctx->testPool, test));
 	return t->inUse ? t->name : nullptr;
 }
