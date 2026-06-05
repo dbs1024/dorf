@@ -100,8 +100,8 @@ inline FixedItemHandle FixedItemPoolT<T>::alloc()
 template<typename T>
 inline void FixedItemPoolT<T>::free(FixedItemHandle item)
 {
-	ACE_ASSERT(item != InvalidFixedItemHandle);
-	if (item == InvalidFixedItemHandle)
+	ACE_ASSERT(item);
+	if (!item)
 		return;
 	getPtr(item)->~T();
 	freeFixedItem(m_pool, item);
@@ -110,8 +110,8 @@ inline void FixedItemPoolT<T>::free(FixedItemHandle item)
 template<typename T>
 inline T* FixedItemPoolT<T>::getPtr(FixedItemHandle item)
 {
-	ACE_ASSERT(item != InvalidFixedItemHandle);
-	if (item == InvalidFixedItemHandle)
+	ACE_ASSERT(item);
+	if (!item)
 		return nullptr;
 	return static_cast<T*>(getFixedItemPtr(m_pool, item));
 }
