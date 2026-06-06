@@ -294,6 +294,8 @@ int main(int argc, char* argv[])
 	printf("[====] Synthesis: Tested: %d | Passing: %d | Failing: %d\n", g_total, g_passed, g_failed);
 
 	SymCleanup(GetCurrentProcess());
+	// destroyUnitTestContext must precede FreeLibrary: suite/test name pointers
+	// stored in the context point into DLL data segments and would dangle otherwise.
 	destroyUnitTestContext(ctx);
 	for (HMODULE h : loadedDlls)
 		FreeLibrary(h);
