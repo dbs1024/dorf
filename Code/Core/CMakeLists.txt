@@ -2,18 +2,23 @@
 set(HEADERS
 	Include/Core.ArgParser/ArgParser.h
 	Include/Core.Base/Assert.h
+	Include/Core.Logger/Logger.h
 	Include/Core.Math/MathUtil.h
 	Include/Core.Math/Vector3f.h
 	Include/Core.UnitTest/UnitTest.h
 	Include/Core.Util/FixedItemPool.h
 	Include/Core.Util/RangePool.h
+	Include/Core.Vfs/Vfs.h
 )
 
 set(SOURCES
 	Source/Core.ArgParser/ArgParser.cpp
+	Source/Core.Logger/Logger.cpp
 	Source/Core.UnitTest/UnitTest.cpp
 	Source/Core.Util/FixedItemPool.cpp
 	Source/Core.Util/RangePool.cpp
+	Source/Core.Vfs/DiskFileSystem.cpp
+	Source/Core.Vfs/Vfs.cpp
 )
 
 add_library(Ace.Core STATIC ${HEADERS} ${SOURCES})
