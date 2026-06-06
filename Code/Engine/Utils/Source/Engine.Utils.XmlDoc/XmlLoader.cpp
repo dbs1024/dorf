@@ -8,23 +8,6 @@
 
 namespace
 {
-	struct NameNode
-	{
-		const char* data;
-		int         len;
-		NameNode*   prev;
-	};
-
-	void cleanupStack(NameNode*& top)
-	{
-		while (top)
-		{
-			NameNode* prev = top->prev;
-			delete top;
-			top = prev;
-		}
-	}
-
 	bool isSpace(char c)
 	{
 		return c == ' ' || c == '\t' || c == '\r' || c == '\n';
@@ -117,15 +100,17 @@ namespace
 		return false;
 	}
 
-	bool skipAttrValue(const char*& p)
+	bool parseAttrValue(const char*& p, const char*& outValue, int& outLen)
 	{
 		char q = *p++;
+		outValue = p;
 		while (*p && *p != q)
 		{
 			if (*p == '<') return false;
 			++p;
 		}
 		if (!*p) return false;
+		outLen = (int)(p - outValue);
 		++p;
 		return true;
 	}
@@ -139,55 +124,125 @@ namespace
 		return true;
 	}
 
-	// Returns 1 for '>', 2 for '/>', 0 on error
-	int parseTagTail(const char*& p)
+	XmlResult parseTagTail(const char*& p, XmlDocument* doc, FixedItemHandle elemHandle, bool& outSelfClosing)
 	{
+		outSelfClosing = false;
+		XmlNode*     elem     = static_cast<XmlNode*>(getFixedItemPtr(doc->nodePool, elemHandle));
+		FixedItemHandle lastAttr = InvalidFixedItemHandle;
+
 		while (*p)
 		{
 			skipSpaces(p);
 			if (*p == '>')
-				{ ++p; return 1; }
+				{ ++p; return XmlResult::Ok; }
 			if (*p == '/' && p[1] == '>')
-				{ p += 2; return 2; }
+				{ p += 2; outSelfClosing = true; return XmlResult::Ok; }
 
-			const char* attrName; int attrLen;
-			if (!parseName(p, attrName, attrLen)) return 0;
+			const char* attrName; int attrNameLen;
+			if (!parseName(p, attrName, attrNameLen)) return XmlResult::ParseError;
 			skipSpaces(p);
-			if (*p != '=') return 0;
+			if (*p != '=') return XmlResult::ParseError;
 			++p;
 			skipSpaces(p);
-			if (*p != '"' && *p != '\'') return 0;
-			if (!skipAttrValue(p)) return 0;
+			if (*p != '"' && *p != '\'') return XmlResult::ParseError;
+
+			const char* attrValue; int attrValueLen;
+			if (!parseAttrValue(p, attrValue, attrValueLen)) return XmlResult::ParseError;
+
+			if (doc->dataEnd - doc->dataCurr < attrNameLen + 1 + attrValueLen + 1)
+				return XmlResult::InternalError;
+
+			memcpy(doc->dataCurr, attrName, attrNameLen);
+			doc->dataCurr[attrNameLen] = '\0';
+			const char* nameCopy = doc->dataCurr;
+			doc->dataCurr += attrNameLen + 1;
+
+			memcpy(doc->dataCurr, attrValue, attrValueLen);
+			doc->dataCurr[attrValueLen] = '\0';
+			const char* valueCopy = doc->dataCurr;
+			doc->dataCurr += attrValueLen + 1;
+
+			FixedItemHandle attrHandle;
+			XmlAttribute* attr = static_cast<XmlAttribute*>(allocFixedItem(attrHandle, doc->attributePool));
+			if (!attr) return XmlResult::InternalError;
+			attr->name          = nameCopy;
+			attr->value         = valueCopy;
+			attr->nextAttribute = InvalidFixedItemHandle;
+
+			if (lastAttr != InvalidFixedItemHandle)
+			{
+				XmlAttribute* last = static_cast<XmlAttribute*>(getFixedItemPtr(doc->attributePool, lastAttr));
+				last->nextAttribute = attrHandle;
+			}
+			else
+			{
+				elem->firstAttribute = attrHandle;
+			}
+			lastAttr = attrHandle;
 		}
-		return 0;
+		return XmlResult::ParseError;
 	}
 
-	bool isWellFormed(const char* str)
+	XmlResult parseXmlDoc(XmlDocument* doc, const char* str)
 	{
-		const char* p        = str;
-		NameNode*   stackTop = nullptr;
-		bool        hasRoot  = false;
+		const char*     p        = str;
+		FixedItemHandle stackTop = InvalidFixedItemHandle;
+		bool            hasRoot  = false;
 
 		while (*p)
 		{
-			skipSpaces(p);
-			if (!*p) break;
-
 			if (*p != '<')
 			{
-				if (!stackTop) { cleanupStack(stackTop); return false; }
+				if (stackTop == InvalidFixedItemHandle)
+				{
+					if (isSpace(*p)) { ++p; continue; }
+					return XmlResult::ParseError;
+				}
+
+				const char* textStart = p;
 				while (*p && *p != '<')
 				{
 					if (*p == '&')
 					{
 						++p;
 						while (*p && *p != ';') ++p;
-						if (!*p) { cleanupStack(stackTop); return false; }
+						if (!*p) return XmlResult::ParseError;
 						++p;
 					}
 					else
 						++p;
 				}
+				int textLen = (int)(p - textStart);
+
+				if (doc->dataEnd - doc->dataCurr < textLen + 1)
+					return XmlResult::InternalError;
+				memcpy(doc->dataCurr, textStart, textLen);
+				doc->dataCurr[textLen] = '\0';
+
+				FixedItemHandle textHandle;
+				XmlNode* textNode = static_cast<XmlNode*>(allocFixedItem(textHandle, doc->nodePool));
+				if (!textNode) return XmlResult::InternalError;
+				textNode->type           = XmlNodeType::Text;
+				textNode->text           = doc->dataCurr;
+				doc->dataCurr           += textLen + 1;
+				textNode->parent         = stackTop;
+				textNode->nextSibling    = InvalidFixedItemHandle;
+				textNode->tagName        = nullptr;
+				textNode->firstChild     = InvalidFixedItemHandle;
+				textNode->lastChild      = InvalidFixedItemHandle;
+				textNode->firstAttribute = InvalidFixedItemHandle;
+
+				XmlNode* textParent = static_cast<XmlNode*>(getFixedItemPtr(doc->nodePool, stackTop));
+				if (textParent->lastChild != InvalidFixedItemHandle)
+				{
+					XmlNode* lastChild = static_cast<XmlNode*>(getFixedItemPtr(doc->nodePool, textParent->lastChild));
+					lastChild->nextSibling = textHandle;
+				}
+				else
+				{
+					textParent->firstChild = textHandle;
+				}
+				textParent->lastChild = textHandle;
 				continue;
 			}
 
@@ -197,18 +252,18 @@ namespace
 			{
 				++p;
 				const char* name; int len;
-				if (!parseName(p, name, len)) { cleanupStack(stackTop); return false; }
+				if (!parseName(p, name, len)) return XmlResult::ParseError;
 				skipSpaces(p);
-				if (*p != '>') { cleanupStack(stackTop); return false; }
+				if (*p != '>') return XmlResult::ParseError;
 				++p;
 
-				if (!stackTop) { cleanupStack(stackTop); return false; }
-				if (stackTop->len != len || memcmp(stackTop->data, name, len) != 0)
-					{ cleanupStack(stackTop); return false; }
+				if (stackTop == InvalidFixedItemHandle) return XmlResult::ParseError;
 
-				NameNode* prev = stackTop->prev;
-				delete stackTop;
-				stackTop = prev;
+				XmlNode* elem = static_cast<XmlNode*>(getFixedItemPtr(doc->nodePool, stackTop));
+				if (memcmp(elem->tagName, name, len) != 0 || elem->tagName[len] != '\0')
+					return XmlResult::ParseError;
+
+				stackTop = elem->parent;
 			}
 			else if (*p == '!')
 			{
@@ -216,58 +271,86 @@ namespace
 				if (p[0] == '-' && p[1] == '-')
 				{
 					p += 2;
-					if (!skipComment(p)) { cleanupStack(stackTop); return false; }
+					if (!skipComment(p)) return XmlResult::ParseError;
 				}
 				else if (strncmp(p, "[CDATA[", 7) == 0)
 				{
-					if (!stackTop) { cleanupStack(stackTop); return false; }
+					if (stackTop == InvalidFixedItemHandle) return XmlResult::ParseError;
 					p += 7;
-					if (!skipCdata(p)) { cleanupStack(stackTop); return false; }
+					if (!skipCdata(p)) return XmlResult::ParseError;
 				}
 				else if (strncmp(p, "DOCTYPE", 7) == 0)
 				{
-					if (hasRoot || stackTop) { cleanupStack(stackTop); return false; }
+					if (hasRoot || stackTop != InvalidFixedItemHandle) return XmlResult::ParseError;
 					p += 7;
-					if (!skipDoctype(p)) { cleanupStack(stackTop); return false; }
+					if (!skipDoctype(p)) return XmlResult::ParseError;
 				}
-				else { cleanupStack(stackTop); return false; }
+				else return XmlResult::ParseError;
 			}
 			else if (*p == '?')
 			{
 				++p;
-				if (!skipPI(p)) { cleanupStack(stackTop); return false; }
+				if (!skipPI(p)) return XmlResult::ParseError;
 			}
 			else
 			{
-				if (!stackTop && hasRoot) { cleanupStack(stackTop); return false; }
+				if (stackTop == InvalidFixedItemHandle && hasRoot) return XmlResult::ParseError;
 
 				const char* name; int len;
-				if (!parseName(p, name, len)) { cleanupStack(stackTop); return false; }
+				if (!parseName(p, name, len)) return XmlResult::ParseError;
 
-				int close = parseTagTail(p);
-				if (close == 0) { cleanupStack(stackTop); return false; }
+				if (doc->dataEnd - doc->dataCurr < len + 1)
+					return XmlResult::InternalError;
+				memcpy(doc->dataCurr, name, len);
+				doc->dataCurr[len] = '\0';
 
-				if (!stackTop) hasRoot = true;
+				FixedItemHandle handle;
+				XmlNode* elem = static_cast<XmlNode*>(allocFixedItem(handle, doc->nodePool));
+				if (!elem) return XmlResult::InternalError;
+				elem->type           = XmlNodeType::Element;
+				elem->tagName        = doc->dataCurr;
+				doc->dataCurr       += len + 1;
+				elem->text           = nullptr;
+				elem->parent         = stackTop;
+				elem->firstChild     = InvalidFixedItemHandle;
+				elem->lastChild      = InvalidFixedItemHandle;
+				elem->nextSibling    = InvalidFixedItemHandle;
+				elem->firstAttribute = InvalidFixedItemHandle;
 
-				if (close == 1)
+				if (stackTop != InvalidFixedItemHandle)
 				{
-					NameNode* node = new (std::nothrow) NameNode;
-					if (!node) { cleanupStack(stackTop); return false; }
-					node->data = name;
-					node->len  = len;
-					node->prev = stackTop;
-					stackTop   = node;
+					XmlNode* parent = static_cast<XmlNode*>(getFixedItemPtr(doc->nodePool, stackTop));
+					if (parent->lastChild != InvalidFixedItemHandle)
+					{
+						XmlNode* lastChild = static_cast<XmlNode*>(getFixedItemPtr(doc->nodePool, parent->lastChild));
+						lastChild->nextSibling = handle;
+					}
+					else
+					{
+						parent->firstChild = handle;
+					}
+					parent->lastChild = handle;
 				}
+				else
+				{
+					doc->root = handle;
+					hasRoot   = true;
+				}
+
+				bool selfClosing = false;
+				XmlResult tagResult = parseTagTail(p, doc, handle, selfClosing);
+				if (tagResult != XmlResult::Ok) return tagResult;
+
+				if (!selfClosing)
+					stackTop = handle;
 			}
 		}
 
-		bool ok = (stackTop == nullptr && hasRoot);
-		cleanupStack(stackTop);
-		return ok;
+		return (stackTop == InvalidFixedItemHandle && hasRoot) ? XmlResult::Ok : XmlResult::ParseError;
 	}
 }
 
-XmlResult loadXmlDoc(XmlDocHandle* outDoc, const char* path)
+XmlResult loadXmlDoc(XmlDocument** outDoc, const char* path)
 {
 	*outDoc = nullptr;
 
@@ -310,9 +393,23 @@ XmlResult loadXmlDoc(XmlDocHandle* outDoc, const char* path)
 	return result;
 }
 
-XmlResult loadXmlString(XmlDocHandle* outDoc, const char* str)
+XmlResult loadXmlString(XmlDocument** outDoc, const char* str)
 {
 	*outDoc = nullptr;
 	if (!str) return XmlResult::InternalError;
-	return isWellFormed(str) ? XmlResult::Ok : XmlResult::ParseError;
+
+	XmlDocument* doc = nullptr;
+	XmlResult result = createXmlDoc(&doc);
+	if (result != XmlResult::Ok)
+		return result;
+
+	result = parseXmlDoc(doc, str);
+	if (result != XmlResult::Ok)
+	{
+		destroyXmlDoc(doc);
+		return result;
+	}
+
+	*outDoc = doc;
+	return XmlResult::Ok;
 }

@@ -17,3 +17,7 @@ target_include_directories(Ace.Engine.Utils
 	PUBLIC  Include
 	PRIVATE Source
 )
+
+target_link_libraries(Ace.Engine.Utils
+	PRIVATE Ace.Core
+)

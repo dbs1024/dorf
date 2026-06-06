@@ -6,56 +6,56 @@
 
 static void testValidSimpleElement(UnitTestContext* ctx)
 {
-	XmlDocHandle doc;
+	XmlDocument* doc;
 	UNIT_TEST_EXPECT(ctx, loadXmlString(&doc, "<root/>") == XmlResult::Ok);
 	destroyXmlDoc(doc);
 }
 
 static void testValidElementWithContent(UnitTestContext* ctx)
 {
-	XmlDocHandle doc;
+	XmlDocument* doc;
 	UNIT_TEST_EXPECT(ctx, loadXmlString(&doc, "<root>text content</root>") == XmlResult::Ok);
 	destroyXmlDoc(doc);
 }
 
 static void testValidNestedElements(UnitTestContext* ctx)
 {
-	XmlDocHandle doc;
+	XmlDocument* doc;
 	UNIT_TEST_EXPECT(ctx, loadXmlString(&doc, "<root><child/><child>text</child></root>") == XmlResult::Ok);
 	destroyXmlDoc(doc);
 }
 
 static void testValidAttributes(UnitTestContext* ctx)
 {
-	XmlDocHandle doc;
+	XmlDocument* doc;
 	UNIT_TEST_EXPECT(ctx, loadXmlString(&doc, "<root id=\"1\" name='foo'/>") == XmlResult::Ok);
 	destroyXmlDoc(doc);
 }
 
 static void testValidXmlDeclaration(UnitTestContext* ctx)
 {
-	XmlDocHandle doc;
+	XmlDocument* doc;
 	UNIT_TEST_EXPECT(ctx, loadXmlString(&doc, "<?xml version=\"1.0\" encoding=\"UTF-8\"?><root/>") == XmlResult::Ok);
 	destroyXmlDoc(doc);
 }
 
 static void testValidComment(UnitTestContext* ctx)
 {
-	XmlDocHandle doc;
+	XmlDocument* doc;
 	UNIT_TEST_EXPECT(ctx, loadXmlString(&doc, "<!-- header --><root><!-- body --></root>") == XmlResult::Ok);
 	destroyXmlDoc(doc);
 }
 
 static void testValidCdata(UnitTestContext* ctx)
 {
-	XmlDocHandle doc;
+	XmlDocument* doc;
 	UNIT_TEST_EXPECT(ctx, loadXmlString(&doc, "<root><![CDATA[<not a tag>]]></root>") == XmlResult::Ok);
 	destroyXmlDoc(doc);
 }
 
 static void testValidEntityRef(UnitTestContext* ctx)
 {
-	XmlDocHandle doc;
+	XmlDocument* doc;
 	UNIT_TEST_EXPECT(ctx, loadXmlString(&doc, "<root>&amp;&lt;&gt;</root>") == XmlResult::Ok);
 	destroyXmlDoc(doc);
 }
@@ -64,61 +64,61 @@ static void testValidEntityRef(UnitTestContext* ctx)
 
 static void testInvalidEmpty(UnitTestContext* ctx)
 {
-	XmlDocHandle doc;
+	XmlDocument* doc;
 	UNIT_TEST_EXPECT(ctx, loadXmlString(&doc, "") == XmlResult::ParseError);
 }
 
 static void testInvalidUnclosedTag(UnitTestContext* ctx)
 {
-	XmlDocHandle doc;
+	XmlDocument* doc;
 	UNIT_TEST_EXPECT(ctx, loadXmlString(&doc, "<root>") == XmlResult::ParseError);
 }
 
 static void testInvalidMismatchedTags(UnitTestContext* ctx)
 {
-	XmlDocHandle doc;
+	XmlDocument* doc;
 	UNIT_TEST_EXPECT(ctx, loadXmlString(&doc, "<root></other>") == XmlResult::ParseError);
 }
 
 static void testInvalidMultipleRoots(UnitTestContext* ctx)
 {
-	XmlDocHandle doc;
+	XmlDocument* doc;
 	UNIT_TEST_EXPECT(ctx, loadXmlString(&doc, "<a/><b/>") == XmlResult::ParseError);
 }
 
 static void testInvalidTextBeforeRoot(UnitTestContext* ctx)
 {
-	XmlDocHandle doc;
+	XmlDocument* doc;
 	UNIT_TEST_EXPECT(ctx, loadXmlString(&doc, "text<root/>") == XmlResult::ParseError);
 }
 
 static void testInvalidUnclosedTagBracket(UnitTestContext* ctx)
 {
-	XmlDocHandle doc;
+	XmlDocument* doc;
 	UNIT_TEST_EXPECT(ctx, loadXmlString(&doc, "<root") == XmlResult::ParseError);
 }
 
 static void testInvalidUnclosedAttrValue(UnitTestContext* ctx)
 {
-	XmlDocHandle doc;
+	XmlDocument* doc;
 	UNIT_TEST_EXPECT(ctx, loadXmlString(&doc, "<root attr=\"unclosed/>") == XmlResult::ParseError);
 }
 
 static void testInvalidUnclosedComment(UnitTestContext* ctx)
 {
-	XmlDocHandle doc;
+	XmlDocument* doc;
 	UNIT_TEST_EXPECT(ctx, loadXmlString(&doc, "<root><!-- unterminated</root>") == XmlResult::ParseError);
 }
 
 static void testInvalidDoubledDashInComment(UnitTestContext* ctx)
 {
-	XmlDocHandle doc;
+	XmlDocument* doc;
 	UNIT_TEST_EXPECT(ctx, loadXmlString(&doc, "<root><!-- bad -- comment --></root>") == XmlResult::ParseError);
 }
 
 static void testInvalidCdataOutsideElement(UnitTestContext* ctx)
 {
-	XmlDocHandle doc;
+	XmlDocument* doc;
 	UNIT_TEST_EXPECT(ctx, loadXmlString(&doc, "<![CDATA[data]]><root/>") == XmlResult::ParseError);
 }
 

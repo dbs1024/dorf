@@ -1,7 +1,7 @@
 // Copyright (c) Darrin Stewart. All rights reserved.
 #pragma once
 
-using XmlDocHandle = void*;
+struct XmlDocument;
 
 enum class XmlResult
 {
@@ -11,6 +11,6 @@ enum class XmlResult
 	InternalError,
 };
 
-XmlResult loadXmlDoc(XmlDocHandle* outDoc, const char* path);
-XmlResult loadXmlString(XmlDocHandle* outDoc, const char* str);
-void      destroyXmlDoc(XmlDocHandle doc);
+XmlResult loadXmlDoc(XmlDocument** outDoc, const char* path);
+XmlResult loadXmlString(XmlDocument** outDoc, const char* str);
+void      destroyXmlDoc(XmlDocument* doc);
