@@ -163,7 +163,26 @@ public:
 };
 ```
 
-### Single-Statement Blocks
+## Type Deduction (`auto`)
+
+Use `auto` only for:
+- Container iterators and range-for loop variables where the type is long or unimportant.
+- Lambda types (always use `auto` for lambdas).
+
+Do not use `auto` in place of a concrete type when the type is short, known, or adds clarity.
+
+```cpp
+// Correct
+auto it = myMap.find(key);
+for (auto& item : items) { ... }
+auto fn = [](int x) { return x * 2; };
+
+// Wrong
+auto* node = static_cast<XmlNode*>(ptr);   // write XmlNode* node
+auto result = computeValue();              // write the actual return type
+```
+
+## Single-Statement Blocks
 Braces may be omitted for single-statement bodies (optional).
 
 ```cpp
