@@ -69,7 +69,7 @@ static const VfsMount* findMount(const Vfs* vfs, const char* path, const char** 
 			continue;
 
 		char next = path[prefixLen];
-		if (next != '\0' && next != '/')
+		if (prefixLen > 0 && next != '\0' && next != '/')
 			continue;
 
 		if (best == nullptr || mount->priority > best->priority)

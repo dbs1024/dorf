@@ -174,8 +174,29 @@ namespace
 		return true;
 	}
 
+	// Writes outDir as the directory portion of path (everything before the final '/'), or an
+	// empty string if path has no directory component. Helper precedes its caller (writeShaderPdb)
+	// — no forward declaration.
+	void getAssetDirectory(char* outDir, size_t outDirSize, const char* path)
+	{
+		const char* lastSlash = strrchr(path, '/');
+		if (!lastSlash)
+		{
+			outDir[0] = '\0';
+			return;
+		}
+
+		size_t length = (size_t)(lastSlash - path);
+		if (length >= outDirSize)
+			length = outDirSize - 1;
+
+		memcpy(outDir, path, length);
+		outDir[length] = '\0';
+	}
+
 	// Writes the PDB output (if any) from result to outputVfs, using the file name DXC suggests
-	// so the compiled object (built with -Zsb) can be matched to its pdb later. Helper precedes
+	// so the compiled object (built with -Zsb) can be matched to its pdb later. The pdb is placed
+	// alongside the compiled shader binary, in the asset's subfolder of the output. Helper precedes
 	// its caller (shaderPipelineBuild) — no forward declaration.
 	bool writeShaderPdb(IDxcResult* result, const AssetPipelineBuildContext* context)
 	{
@@ -195,12 +216,24 @@ namespace
 		}
 
 		bool ok = true;
-		char pdbPath[MaxShaderArgStringLength];
+		char pdbFileName[MaxShaderArgStringLength];
 
-		if (WideCharToMultiByte(CP_UTF8, 0, pdbName->GetStringPointer(), -1, pdbPath, MaxShaderArgStringLength, nullptr, nullptr) <= 0)
+		if (WideCharToMultiByte(CP_UTF8, 0, pdbName->GetStringPointer(), -1, pdbFileName, MaxShaderArgStringLength, nullptr, nullptr) <= 0)
 		{
 			aceLog(context->logger, LogLevel::Error, "shader asset '%s' has a pdb name too long to convert to a narrow string", context->assetName);
 			ok = false;
+		}
+
+		char pdbPath[MaxShaderArgStringLength];
+		if (ok)
+		{
+			char assetDir[MaxShaderArgStringLength];
+			getAssetDirectory(assetDir, sizeof(assetDir), context->assetName);
+
+			if (assetDir[0] != '\0')
+				snprintf(pdbPath, sizeof(pdbPath), "%s/%s", assetDir, pdbFileName);
+			else
+				snprintf(pdbPath, sizeof(pdbPath), "%s", pdbFileName);
 		}
 
 		if (ok)

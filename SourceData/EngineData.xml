@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Assets>
+	<Asset type="Shader" name="Shaders/DebugDrawVs" src="Shaders/DebugDraw.hlsl" stage="vs" entry="vsMain" />
+	<Asset type="Shader" name="Shaders/DebugDrawPs" src="Shaders/DebugDraw.hlsl" stage="ps" entry="psMain" />
+</Assets>

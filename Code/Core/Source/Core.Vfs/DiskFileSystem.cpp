@@ -39,6 +39,25 @@ static void buildPath(char* outPath, size_t outSize, const char* basePath, const
 		snprintf(outPath, outSize, "%s/%s", basePath, relativePath);
 }
 
+// Creates every directory in filePath's parent chain that doesn't already exist, so that
+// fopen can create the file itself. Helper precedes its caller (diskOpenFile) — no forward declaration.
+static void createParentDirectories(const char* filePath)
+{
+	char buffer[1024];
+	snprintf(buffer, sizeof(buffer), "%s", filePath);
+
+	for (char* p = buffer + 1; *p != '\0'; ++p)
+	{
+		if (*p == '/' || *p == '\\')
+		{
+			char separator = *p;
+			*p = '\0';
+			CreateDirectoryA(buffer, nullptr);
+			*p = separator;
+		}
+	}
+}
+
 static void diskUnmount(void* backendCtx)
 {
 	DiskCtx* ctx = (DiskCtx*)backendCtx;
@@ -62,6 +81,9 @@ static VfsResult diskOpenFile(VfsBackendFileHandle* outFile, void* backendCtx,
 	const char* mode = "rb";
 	if (write && create) mode = read ? "w+b" : "wb";
 	else if (write)      mode = read ? "r+b" : "wb";
+
+	if (create)
+		createParentDirectories(fullPath);
 
 	FILE* f = nullptr;
 	fopen_s(&f, fullPath, mode);
