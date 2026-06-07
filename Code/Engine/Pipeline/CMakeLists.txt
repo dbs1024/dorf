@@ -5,6 +5,8 @@ set(HEADERS
 
 set(SOURCES
 	Source/Engine.AssetPipeline/AssetPipeline.cpp
+	Source/Engine.AssetPipeline/ShaderPipeline.cpp
+	Source/Engine.AssetPipeline/ShaderPipeline.h
 )
 
 add_library(Ace.Engine.AssetPipeline STATIC ${HEADERS} ${SOURCES})

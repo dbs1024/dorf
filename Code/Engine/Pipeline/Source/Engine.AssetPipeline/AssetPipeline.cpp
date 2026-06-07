@@ -1,6 +1,8 @@
 // Copyright (c) Darrin Stewart. All rights reserved.
 #include "Engine.AssetPipeline/AssetPipeline.h"
 
+#include "ShaderPipeline.h"
+
 #include "Core.Util/FixedItemPool.h"
 
 #include <cstring>
@@ -133,6 +135,21 @@ AssetPipelineResult createAssetPipelineRegistry(AssetPipelineRegistryHandle* out
 		delete registry;
 		*outRegistry = InvalidAssetPipelineRegistryHandle;
 		return AssetPipelineResult::InternalError;
+	}
+
+	static const AssetPipelineDesc builtInPipelineDescs[] =
+	{
+		{ "Shader", shaderPipelineBuild, nullptr },
+	};
+
+	for (const AssetPipelineDesc& builtInDesc : builtInPipelineDescs)
+	{
+		if (registerAssetPipeline(registry, &builtInDesc) != AssetPipelineResult::Ok)
+		{
+			destroyAssetPipelineRegistry(registry);
+			*outRegistry = InvalidAssetPipelineRegistryHandle;
+			return AssetPipelineResult::InternalError;
+		}
 	}
 
 	*outRegistry = registry;

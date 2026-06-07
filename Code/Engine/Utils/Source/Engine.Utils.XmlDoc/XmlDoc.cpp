@@ -140,6 +140,24 @@ XmlAttributeHandle getXmlAttribute(XmlDocument* doc, XmlElementHandle element, c
 	return nullptr;
 }
 
+XmlAttributeHandle getFirstXmlAttribute(XmlDocument* doc, XmlElementHandle element)
+{
+	XmlNode* node = static_cast<XmlNode*>(element);
+	ACE_ASSERT(node->type == XmlNodeType::Element);
+
+	if (node->firstAttribute == InvalidFixedItemHandle)
+		return nullptr;
+	return getFixedItemPtr(doc->attributePool, node->firstAttribute);
+}
+
+XmlAttributeHandle getNextXmlAttribute(XmlDocument* doc, XmlAttributeHandle attr)
+{
+	FixedItemHandle nextHandle = static_cast<XmlAttribute*>(attr)->nextAttribute;
+	if (nextHandle == InvalidFixedItemHandle)
+		return nullptr;
+	return getFixedItemPtr(doc->attributePool, nextHandle);
+}
+
 const char* getXmlAttributeName(XmlDocument* /*doc*/, XmlAttributeHandle attr)
 {
 	return static_cast<XmlAttribute*>(attr)->name;

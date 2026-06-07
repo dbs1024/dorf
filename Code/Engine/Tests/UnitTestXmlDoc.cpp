@@ -277,6 +277,44 @@ static void testAttributeMultiple(UnitTestContext* ctx)
 	destroyXmlDoc(doc);
 }
 
+static void testAttributeEnumerateNone(UnitTestContext* ctx)
+{
+	XmlDocument* doc;
+	UNIT_TEST_EXPECT(ctx, loadXmlString(&doc, "<root/>") == XmlResult::Ok);
+
+	XmlElementHandle root = getRootXmlElement(doc);
+	UNIT_TEST_EXPECT(ctx, getFirstXmlAttribute(doc, root) == nullptr);
+
+	destroyXmlDoc(doc);
+}
+
+static void testAttributeEnumerateMultiple(UnitTestContext* ctx)
+{
+	XmlDocument* doc;
+	UNIT_TEST_EXPECT(ctx, loadXmlString(&doc, "<root a=\"1\" b=\"2\" c=\"3\"/>") == XmlResult::Ok);
+
+	XmlElementHandle root = getRootXmlElement(doc);
+
+	XmlAttributeHandle a = getFirstXmlAttribute(doc, root);
+	UNIT_TEST_EXPECT(ctx, a != nullptr);
+	UNIT_TEST_EXPECT(ctx, strcmp(getXmlAttributeName(doc, a), "a") == 0);
+	UNIT_TEST_EXPECT(ctx, strcmp(getXmlAttributeValue(doc, a), "1") == 0);
+
+	XmlAttributeHandle b = getNextXmlAttribute(doc, a);
+	UNIT_TEST_EXPECT(ctx, b != nullptr);
+	UNIT_TEST_EXPECT(ctx, strcmp(getXmlAttributeName(doc, b), "b") == 0);
+	UNIT_TEST_EXPECT(ctx, strcmp(getXmlAttributeValue(doc, b), "2") == 0);
+
+	XmlAttributeHandle c = getNextXmlAttribute(doc, b);
+	UNIT_TEST_EXPECT(ctx, c != nullptr);
+	UNIT_TEST_EXPECT(ctx, strcmp(getXmlAttributeName(doc, c), "c") == 0);
+	UNIT_TEST_EXPECT(ctx, strcmp(getXmlAttributeValue(doc, c), "3") == 0);
+
+	UNIT_TEST_EXPECT(ctx, getNextXmlAttribute(doc, c) == nullptr);
+
+	destroyXmlDoc(doc);
+}
+
 // ---- AttributeAs ----
 
 static void testAttributeAsStringFound(UnitTestContext* ctx)
@@ -581,9 +619,11 @@ void registerXmlDocTests(UnitTestContext* ctx)
 	UnitTestSuiteHandle attributeSuite;
 	createUnitTestSuite(attributeSuite, ctx, "Attribute", xmlDocSuite);
 
-	createUnitTest(h, ctx, "Found",    testAttributeFound,    attributeSuite);
-	createUnitTest(h, ctx, "NotFound", testAttributeNotFound, attributeSuite);
-	createUnitTest(h, ctx, "Multiple", testAttributeMultiple, attributeSuite);
+	createUnitTest(h, ctx, "Found",              testAttributeFound,             attributeSuite);
+	createUnitTest(h, ctx, "NotFound",           testAttributeNotFound,          attributeSuite);
+	createUnitTest(h, ctx, "Multiple",           testAttributeMultiple,          attributeSuite);
+	createUnitTest(h, ctx, "EnumerateNone",      testAttributeEnumerateNone,     attributeSuite);
+	createUnitTest(h, ctx, "EnumerateMultiple",  testAttributeEnumerateMultiple, attributeSuite);
 
 	UnitTestSuiteHandle attributeAsSuite;
 	createUnitTestSuite(attributeAsSuite, ctx, "AttributeAs", xmlDocSuite);

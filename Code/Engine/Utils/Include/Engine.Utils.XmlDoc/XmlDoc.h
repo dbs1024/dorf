@@ -23,6 +23,8 @@ XmlElementHandle   getFirstChildXmlElement(XmlDocument* doc, XmlElementHandle el
 XmlElementHandle   getNextSiblingXmlElement(XmlDocument* doc, XmlElementHandle element, const char* nameFilter = nullptr);
 const char*        getXmlText(XmlDocument* doc, XmlElementHandle element);
 XmlAttributeHandle getXmlAttribute(XmlDocument* doc, XmlElementHandle element, const char* name);
+XmlAttributeHandle getFirstXmlAttribute(XmlDocument* doc, XmlElementHandle element);
+XmlAttributeHandle getNextXmlAttribute(XmlDocument* doc, XmlAttributeHandle attr);
 const char*        getXmlAttributeName(XmlDocument* doc, XmlAttributeHandle attr);
 const char*        getXmlAttributeValue(XmlDocument* doc, XmlAttributeHandle attr);
 const char*        getXmlAttributeAsString(XmlDocument* doc, XmlElementHandle element, const char* name, const char* fallback = nullptr);
