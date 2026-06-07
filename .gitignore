@@ -1,5 +1,6 @@
 build/
 bin/
+external/
 
 # Claude Code — ignore personal/temporary files, keep shared project config
 .claude/settings.local.json
