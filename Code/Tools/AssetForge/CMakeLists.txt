@@ -5,4 +5,5 @@ add_executable(Ace.Tools.AssetForge
 
 target_link_libraries(Ace.Tools.AssetForge
 	PRIVATE Ace.Core
+	PRIVATE Ace.Engine.AssetPipeline
 )
