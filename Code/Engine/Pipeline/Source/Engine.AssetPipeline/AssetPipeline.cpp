@@ -9,8 +9,9 @@
 
 struct AssetPipelineRegistry
 {
-	FixedItemPoolHandle pool;
-	int                 count;
+	FixedItemPoolHandle  pool;
+	int                  count;
+	ShaderPipelineHandle shaderPipeline;
 };
 
 namespace
@@ -119,6 +120,16 @@ namespace
 
 		return nullptr;
 	}
+
+	AssetPipelineResult createAndRegisterBuiltInPipelines(AssetPipelineRegistryHandle registry)
+	{
+		return createAndRegisterShaderPipeline(&registry->shaderPipeline, registry);
+	}
+
+	void destroyBuiltInPipelines(AssetPipelineRegistryHandle registry)
+	{
+		destroyShaderPipeline(registry->shaderPipeline);
+	}
 }
 
 AssetPipelineResult createAssetPipelineRegistry(AssetPipelineRegistryHandle* outRegistry)
@@ -137,19 +148,11 @@ AssetPipelineResult createAssetPipelineRegistry(AssetPipelineRegistryHandle* out
 		return AssetPipelineResult::InternalError;
 	}
 
-	static const AssetPipelineDesc builtInPipelineDescs[] =
+	if (createAndRegisterBuiltInPipelines(registry) != AssetPipelineResult::Ok)
 	{
-		{ "Shader", shaderPipelineBuild, nullptr },
-	};
-
-	for (const AssetPipelineDesc& builtInDesc : builtInPipelineDescs)
-	{
-		if (registerAssetPipeline(registry, &builtInDesc) != AssetPipelineResult::Ok)
-		{
-			destroyAssetPipelineRegistry(registry);
-			*outRegistry = InvalidAssetPipelineRegistryHandle;
-			return AssetPipelineResult::InternalError;
-		}
+		destroyAssetPipelineRegistry(registry);
+		*outRegistry = InvalidAssetPipelineRegistryHandle;
+		return AssetPipelineResult::InternalError;
 	}
 
 	*outRegistry = registry;
@@ -162,6 +165,7 @@ void destroyAssetPipelineRegistry(AssetPipelineRegistryHandle registry)
 		return;
 
 	destroyFixedItemPool(registry->pool);
+	destroyBuiltInPipelines(registry);
 	delete registry;
 }
 
