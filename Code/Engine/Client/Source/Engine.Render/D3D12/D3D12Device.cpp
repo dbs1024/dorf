@@ -142,7 +142,7 @@ static RhiError initFences(RhiDevice* device, const RhiDeviceCreateParams& param
 
 	for (unsigned i = 0; i < params.maxRenderedFrames; ++i)
 	{
-		device->frameFenceEvents[i] = CreateEvent(nullptr, FALSE, FALSE, nullptr);
+		device->frameFenceEvents[i] = CreateEvent(nullptr, FALSE, TRUE, nullptr);
 		if (!device->frameFenceEvents[i])
 		{
 			printf("initFences: CreateEvent(%u) failed\n", i);
@@ -202,9 +202,29 @@ static RhiError initSwapChain(RhiDevice* device, IDXGIFactory7* factory, const R
 		}
 		resource->state     = D3D12_RESOURCE_STATE_PRESENT;
 		resource->rtvHandle = allocPersistentDescriptor(&device->cpuRtvHeap);
+
+		D3D12_CPU_DESCRIPTOR_HANDLE rtvCpuHandle = getD3D12CpuDescriptorHandle(&device->cpuRtvHeap, resource->rtvHandle);
+
+		D3D12_RENDER_TARGET_VIEW_DESC rtvDesc = {};
+		rtvDesc.Format        = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+		rtvDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
+
+		device->d3dDevice->CreateRenderTargetView(resource->resource, &rtvDesc, rtvCpuHandle);
 	}
 
 	return RhiError::Ok;
+}
+
+static void waitForIdle(RhiDevice* device)
+{
+	waitForCommandQueueIdle(&device->graphicsQueue);
+	waitForCommandQueueIdle(&device->computeQueue);
+
+	for (unsigned i = 0; i < kRhiMaxRenderedFrames; ++i)
+	{
+		if (device->frameFenceEvents[i])
+			WaitForSingleObject(device->frameFenceEvents[i], INFINITE);
+	}
 }
 
 RhiError createRhiDevice(RhiDevice** outDevice, const RhiDeviceCreateParams& params)
@@ -258,6 +278,9 @@ void destroyRhiDevice(RhiDevice* device)
 {
 	if (!device)
 		return;
+
+	waitForIdle(device);
+
 	for (unsigned i = 0; i < kRhiSwapChainImageCount; ++i)
 	{
 		if (device->swapChainImages[i] == InvalidFixedItemHandle)
@@ -298,6 +321,35 @@ void destroyRhiDevice(RhiDevice* device)
 		device->d3dDevice = nullptr;
 	}
 	delete device;
+}
+
+void beginRhiDeviceFrame(RhiDevice* device)
+{
+	ACE_ASSERT(!device->insideFrame);
+	device->insideFrame = true;
+
+	unsigned bufferIndex = device->swapChain->GetCurrentBackBufferIndex();
+	WaitForSingleObject(device->frameFenceEvents[bufferIndex], INFINITE);
+}
+
+void endRhiDeviceFrame(RhiDevice* device)
+{
+	ACE_ASSERT(device->insideFrame);
+	device->insideFrame = false;
+
+	unsigned bufferIndex = device->swapChain->GetCurrentBackBufferIndex();
+	device->swapChain->Present(1, 0);
+
+	garbageCollectCommandQueue(&device->graphicsQueue);
+	garbageCollectCommandQueue(&device->computeQueue);
+
+	device->frameFence->SetEventOnCompletion(device->frameCount, device->frameFenceEvents[bufferIndex]);
+
+	device->graphicsQueue.queue->Signal(device->frameFence, device->frameCount);
+	// TODO: compute queues aren't used yet; revisit how the frame fence should be signaled across multiple queues
+	// device->computeQueue.queue->Signal(device->frameFence, device->frameCount);
+
+	device->frameCount++;
 }
 
 RhiResource* allocResource(RhiResourceHandle& outHandle, RhiDevice* device)

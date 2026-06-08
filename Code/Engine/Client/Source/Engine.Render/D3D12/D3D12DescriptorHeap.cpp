@@ -58,3 +58,12 @@ void freePersistentDescriptor(RhiDescriptorHeap* heap, RhiDescriptorHandle handl
 	ACE_ASSERT(static_cast<unsigned>(handle) <= heap->persistentDescriptorCount);
 	heap->persistentFreeList[heap->persistentFreeCount++] = handle - 1;
 }
+
+D3D12_CPU_DESCRIPTOR_HANDLE getD3D12CpuDescriptorHandle(const RhiDescriptorHeap* heap, RhiDescriptorHandle handle)
+{
+	ACE_ASSERT(handle > 0 && static_cast<unsigned>(handle) <= heap->persistentDescriptorCount);
+
+	D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle = heap->cpuHandle;
+	cpuHandle.ptr += static_cast<SIZE_T>(handle - 1) * heap->descriptorSize;
+	return cpuHandle;
+}

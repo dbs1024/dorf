@@ -10,6 +10,7 @@ set(SOURCES
 	Source/Engine.Input/InputManager.cpp
 	Source/Engine.Render/D3D12/D3D12Device.h
 	Source/Engine.Render/D3D12/D3D12Device.cpp
+	Source/Engine.Render/D3D12/D3D12CommandList.cpp
 	Source/Engine.Render/D3D12/D3D12CommandQueue.cpp
 	Source/Engine.Render/D3D12/D3D12DescriptorHeap.cpp
 	Source/Engine.Render/D3D12/D3D12RingBuffer.cpp

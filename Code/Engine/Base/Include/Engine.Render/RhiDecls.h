@@ -7,3 +7,9 @@ enum class RhiShaderStage : unsigned
 	Pixel,
 	Compute,
 };
+
+enum class RhiFormat : unsigned
+{
+	R8G8B8A8_Unorm,
+	R8G8B8A8_Unorm_Srgb,
+};
