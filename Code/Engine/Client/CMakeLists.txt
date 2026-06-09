@@ -26,5 +26,6 @@ target_include_directories(Ace.Engine.Client
 )
 
 target_link_libraries(Ace.Engine.Client
-	PRIVATE Ace.Core d3d12.lib dxgi.lib
+	PUBLIC  Ace.Core
+	PRIVATE d3d12.lib dxgi.lib
 )

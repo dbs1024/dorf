@@ -2,9 +2,11 @@
 set(HEADERS
 	Include/Core.ArgParser/ArgParser.h
 	Include/Core.Base/Assert.h
+	Include/Core.Color/Color.h
 	Include/Core.Logger/Logger.h
 	Include/Core.Math/MathUtil.h
 	Include/Core.Math/Vector3f.h
+	Include/Core.Math/Vector4f.h
 	Include/Core.UnitTest/UnitTest.h
 	Include/Core.Util/FixedItemPool.h
 	Include/Core.Util/RangePool.h

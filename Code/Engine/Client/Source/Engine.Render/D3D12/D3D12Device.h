@@ -42,6 +42,7 @@ struct RhiCommandList
 {
 	ID3D12GraphicsCommandList* commandList;
 	ID3D12CommandAllocator*    allocator;
+	RhiDevice*                 device;
 	RhiCommandListType         type;
 	bool                       isOpen;
 	FixedItemHandle            selfHandle;

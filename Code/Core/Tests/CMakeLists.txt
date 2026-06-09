@@ -2,6 +2,7 @@
 add_library(Ace.Core.Tests SHARED
 	UnitTestCore.cpp
 	UnitTestArgParser.cpp
+	UnitTestColor.cpp
 	UnitTestMath.cpp
 )
 

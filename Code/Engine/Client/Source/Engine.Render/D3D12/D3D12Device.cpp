@@ -352,6 +352,12 @@ void rhiEndFrame(RhiDevice* device)
 	device->frameCount++;
 }
 
+RhiResource* rhiGetBackBuffer(RhiDevice* device)
+{
+	unsigned bufferIndex = device->swapChain->GetCurrentBackBufferIndex();
+	return static_cast<RhiResource*>(getFixedItemPtr(device->resourcePool, device->swapChainImages[bufferIndex]));
+}
+
 RhiResource* allocResource(RhiResourceHandle& outHandle, RhiDevice* device)
 {
 	void* ptr = allocFixedItem(outHandle, device->resourcePool);

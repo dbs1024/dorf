@@ -2,11 +2,13 @@
 #include "Core.UnitTest/UnitTest.h"
 
 void registerArgParserTests(UnitTestContext* ctx);
+void registerColorTests(UnitTestContext* ctx);
 void registerMathTests(UnitTestContext* ctx);
 
 extern "C" __declspec(dllexport)
 void registerUnitTests(UnitTestContext* ctx)
 {
 	registerArgParserTests(ctx);
+	registerColorTests(ctx);
 	registerMathTests(ctx);
 }

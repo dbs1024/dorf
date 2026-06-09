@@ -136,3 +136,8 @@ InputManager* getDemoAppInputManager(DemoAppContext* ctx)
 {
 	return ctx ? ctx->inputManager : nullptr;
 }
+
+RhiDevice* getDemoAppRhiDevice(DemoAppContext* ctx)
+{
+	return ctx ? ctx->rhiDevice : nullptr;
+}

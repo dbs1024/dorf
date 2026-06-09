@@ -134,7 +134,7 @@ void destroyRhiCommandList(RhiCommandList* commandList)
 	}
 }
 
-RhiCommandListHandle rhiOpenCommandList(RhiDevice* device, RhiCommandListType type)
+RhiCommandList* rhiOpenCommandList(RhiDevice* device, RhiCommandListType type)
 {
 	D3D12_COMMAND_LIST_TYPE d3dType = (type == RhiCommandListType::Compute) ? D3D12_COMMAND_LIST_TYPE_COMPUTE : D3D12_COMMAND_LIST_TYPE_DIRECT;
 	RhiCommandQueue& queue = (type == RhiCommandListType::Compute) ? device->computeQueue : device->graphicsQueue;
@@ -149,7 +149,8 @@ RhiCommandListHandle rhiOpenCommandList(RhiDevice* device, RhiCommandListType ty
 
 	RhiCommandList* commandList = static_cast<RhiCommandList*>(ptr);
 	memset(commandList, 0, sizeof(RhiCommandList));
-	commandList->type = type;
+	commandList->device = device;
+	commandList->type   = type;
 	commandList->selfHandle = handle;
 
 	HRESULT hr = device->d3dDevice->CreateCommandAllocator(d3dType, IID_PPV_ARGS(&commandList->allocator));
@@ -166,17 +167,6 @@ RhiCommandListHandle rhiOpenCommandList(RhiDevice* device, RhiCommandListType ty
 	{
 		ACE_ASSERT(false);
 		printf("rhiOpenCommandList: CreateCommandList failed (hr=0x%08X)\n", hr);
-		commandList->allocator->Release();
-		freeFixedItem(queue.commandListPool, handle);
-		return nullptr;
-	}
-
-	hr = commandList->commandList->Reset(commandList->allocator, nullptr);
-	if (FAILED(hr))
-	{
-		ACE_ASSERT(false);
-		printf("rhiOpenCommandList: Reset failed (hr=0x%08X)\n", hr);
-		commandList->commandList->Release();
 		commandList->allocator->Release();
 		freeFixedItem(queue.commandListPool, handle);
 		return nullptr;
@@ -202,18 +192,16 @@ RhiCommandListHandle rhiOpenCommandList(RhiDevice* device, RhiCommandListType ty
 	return commandList;
 }
 
-void rhiCloseCommandList(RhiCommandListHandle commandListHandle)
+void rhiCloseCommandList(RhiCommandList* commandList)
 {
-	RhiCommandList* commandList = static_cast<RhiCommandList*>(commandListHandle);
 	ACE_ASSERT(commandList->isOpen);
 
 	ACE_VERIFY_HR(commandList->commandList->Close());
 	commandList->isOpen = false;
 }
 
-void rhiExecuteCommandList(RhiDevice* device, RhiCommandListHandle commandListHandle)
+void rhiExecuteCommandList(RhiDevice* device, RhiCommandList* commandList)
 {
-	RhiCommandList* commandList = static_cast<RhiCommandList*>(commandListHandle);
 	ACE_ASSERT(!commandList->isOpen);
 
 	RhiCommandQueue& queue = (commandList->type == RhiCommandListType::Compute) ? device->computeQueue : device->graphicsQueue;
