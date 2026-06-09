@@ -31,7 +31,7 @@ void destroyDemoAppContext(DemoAppContext* ctx)
 	if (!ctx)
 		return;
 	destroyInputManager(ctx->inputManager);
-	destroyRhiDevice(ctx->rhiDevice);
+	rhiDestroyDevice(ctx->rhiDevice);
 	if (ctx->hwnd)
 		DestroyWindow(ctx->hwnd);
 	delete ctx;
@@ -94,7 +94,7 @@ DemoAppResult createDemoAppWindow(DemoAppContext* ctx, const char* title, int cl
 	rhiParams.backbufferWidth     = clientWidth;
 	rhiParams.backbufferHeight    = clientHeight;
 
-	if (createRhiDevice(&ctx->rhiDevice, rhiParams) != RhiError::Ok)
+	if (rhiCreateDevice(&ctx->rhiDevice, rhiParams) != RhiError::Ok)
 	{
 		printf("DemoApp: failed to create RhiDevice\n");
 		DestroyWindow(ctx->hwnd);

@@ -28,12 +28,12 @@ enum class RhiCommandListType : unsigned
 
 using RhiCommandListHandle = void*;
 
-RhiError createRhiDevice(RhiDevice** outDevice, const RhiDeviceCreateParams& params);
-void     destroyRhiDevice(RhiDevice* device);
+RhiError rhiCreateDevice(RhiDevice** outDevice, const RhiDeviceCreateParams& params);
+void     rhiDestroyDevice(RhiDevice* device);
 
-void     beginRhiDeviceFrame(RhiDevice* device);
-void     endRhiDeviceFrame(RhiDevice* device);
+void     rhiBeginFrame(RhiDevice* device);
+void     rhiEndFrame(RhiDevice* device);
 
-RhiCommandListHandle openRhiCommandList(RhiDevice* device, RhiCommandListType type);
-void                 closeRhiCommandList(RhiCommandListHandle commandList);
-void                 executeRhiCommandList(RhiDevice* device, RhiCommandListHandle commandList);
+RhiCommandListHandle rhiOpenCommandList(RhiDevice* device, RhiCommandListType type);
+void                 rhiCloseCommandList(RhiCommandListHandle commandList);
+void                 rhiExecuteCommandList(RhiDevice* device, RhiCommandListHandle commandList);

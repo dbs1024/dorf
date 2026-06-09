@@ -134,7 +134,7 @@ void destroyRhiCommandList(RhiCommandList* commandList)
 	}
 }
 
-RhiCommandListHandle openRhiCommandList(RhiDevice* device, RhiCommandListType type)
+RhiCommandListHandle rhiOpenCommandList(RhiDevice* device, RhiCommandListType type)
 {
 	D3D12_COMMAND_LIST_TYPE d3dType = (type == RhiCommandListType::Compute) ? D3D12_COMMAND_LIST_TYPE_COMPUTE : D3D12_COMMAND_LIST_TYPE_DIRECT;
 	RhiCommandQueue& queue = (type == RhiCommandListType::Compute) ? device->computeQueue : device->graphicsQueue;
@@ -156,7 +156,7 @@ RhiCommandListHandle openRhiCommandList(RhiDevice* device, RhiCommandListType ty
 	if (FAILED(hr))
 	{
 		ACE_ASSERT(false);
-		printf("openRhiCommandList: CreateCommandAllocator failed (hr=0x%08X)\n", hr);
+		printf("rhiOpenCommandList: CreateCommandAllocator failed (hr=0x%08X)\n", hr);
 		freeFixedItem(queue.commandListPool, handle);
 		return nullptr;
 	}
@@ -165,7 +165,7 @@ RhiCommandListHandle openRhiCommandList(RhiDevice* device, RhiCommandListType ty
 	if (FAILED(hr))
 	{
 		ACE_ASSERT(false);
-		printf("openRhiCommandList: CreateCommandList failed (hr=0x%08X)\n", hr);
+		printf("rhiOpenCommandList: CreateCommandList failed (hr=0x%08X)\n", hr);
 		commandList->allocator->Release();
 		freeFixedItem(queue.commandListPool, handle);
 		return nullptr;
@@ -175,7 +175,7 @@ RhiCommandListHandle openRhiCommandList(RhiDevice* device, RhiCommandListType ty
 	if (FAILED(hr))
 	{
 		ACE_ASSERT(false);
-		printf("openRhiCommandList: Reset failed (hr=0x%08X)\n", hr);
+		printf("rhiOpenCommandList: Reset failed (hr=0x%08X)\n", hr);
 		commandList->commandList->Release();
 		commandList->allocator->Release();
 		freeFixedItem(queue.commandListPool, handle);
@@ -202,7 +202,7 @@ RhiCommandListHandle openRhiCommandList(RhiDevice* device, RhiCommandListType ty
 	return commandList;
 }
 
-void closeRhiCommandList(RhiCommandListHandle commandListHandle)
+void rhiCloseCommandList(RhiCommandListHandle commandListHandle)
 {
 	RhiCommandList* commandList = static_cast<RhiCommandList*>(commandListHandle);
 	ACE_ASSERT(commandList->isOpen);
@@ -211,7 +211,7 @@ void closeRhiCommandList(RhiCommandListHandle commandListHandle)
 	commandList->isOpen = false;
 }
 
-void executeRhiCommandList(RhiDevice* device, RhiCommandListHandle commandListHandle)
+void rhiExecuteCommandList(RhiDevice* device, RhiCommandListHandle commandListHandle)
 {
 	RhiCommandList* commandList = static_cast<RhiCommandList*>(commandListHandle);
 	ACE_ASSERT(!commandList->isOpen);

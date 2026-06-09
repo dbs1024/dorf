@@ -227,7 +227,7 @@ static void waitForIdle(RhiDevice* device)
 	}
 }
 
-RhiError createRhiDevice(RhiDevice** outDevice, const RhiDeviceCreateParams& params)
+RhiError rhiCreateDevice(RhiDevice** outDevice, const RhiDeviceCreateParams& params)
 {
 	if (params.maxRenderedFrames > kRhiMaxRenderedFrames)
 		return RhiError::InvalidArg;
@@ -242,31 +242,31 @@ RhiError createRhiDevice(RhiDevice** outDevice, const RhiDeviceCreateParams& par
 	ComPtr<IDXGIFactory7> factory = initD3dDevice(device, params);
 	if (!factory)
 	{
-		destroyRhiDevice(device);
+		rhiDestroyDevice(device);
 		return RhiError::Failed;
 	}
 
 	if (initCommandQueues(device) != RhiError::Ok)
 	{
-		destroyRhiDevice(device);
+		rhiDestroyDevice(device);
 		return RhiError::Failed;
 	}
 
 	if (initDescriptorHeaps(device) != RhiError::Ok)
 	{
-		destroyRhiDevice(device);
+		rhiDestroyDevice(device);
 		return RhiError::Failed;
 	}
 
 	if (initFences(device, params) != RhiError::Ok)
 	{
-		destroyRhiDevice(device);
+		rhiDestroyDevice(device);
 		return RhiError::Failed;
 	}
 
 	if (initSwapChain(device, factory.Get(), params) != RhiError::Ok)
 	{
-		destroyRhiDevice(device);
+		rhiDestroyDevice(device);
 		return RhiError::Failed;
 	}
 
@@ -274,7 +274,7 @@ RhiError createRhiDevice(RhiDevice** outDevice, const RhiDeviceCreateParams& par
 	return RhiError::Ok;
 }
 
-void destroyRhiDevice(RhiDevice* device)
+void rhiDestroyDevice(RhiDevice* device)
 {
 	if (!device)
 		return;
@@ -323,7 +323,7 @@ void destroyRhiDevice(RhiDevice* device)
 	delete device;
 }
 
-void beginRhiDeviceFrame(RhiDevice* device)
+void rhiBeginFrame(RhiDevice* device)
 {
 	ACE_ASSERT(!device->insideFrame);
 	device->insideFrame = true;
@@ -332,7 +332,7 @@ void beginRhiDeviceFrame(RhiDevice* device)
 	WaitForSingleObject(device->frameFenceEvents[bufferIndex], INFINITE);
 }
 
-void endRhiDeviceFrame(RhiDevice* device)
+void rhiEndFrame(RhiDevice* device)
 {
 	ACE_ASSERT(device->insideFrame);
 	device->insideFrame = false;

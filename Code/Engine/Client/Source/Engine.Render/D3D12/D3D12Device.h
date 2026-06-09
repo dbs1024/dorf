@@ -52,7 +52,7 @@ static_assert(std::is_trivially_default_constructible_v<RhiCommandList> && std::
 struct InFlightCommandList
 {
 	RhiCommandList* commandList;
-	uint64_t        submissionIndex; // 0 means opened but not yet submitted to executeRhiCommandList
+	uint64_t        submissionIndex; // 0 means opened but not yet submitted to rhiExecuteCommandList
 };
 
 static_assert(std::is_trivially_default_constructible_v<InFlightCommandList> && std::is_trivially_destructible_v<InFlightCommandList>);
