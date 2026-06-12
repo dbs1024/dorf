@@ -1,6 +1,7 @@
 // Copyright (c) Darrin Stewart. All rights reserved.
 #include "Engine.DemoApp/DemoApp.h"
 #include "Engine.Input/InputManager.h"
+#include "Engine.Render/DebugDraw.h"
 #include "Engine.Render/Rhi/RhiDevice.h"
 
 #include <cstdio>
@@ -12,6 +13,7 @@ struct DemoAppContext
 	HWND hwnd;
 	RhiDevice* rhiDevice;
 	InputManager* inputManager;
+	DebugDrawContext* debugDrawContext;
 };
 
 void createDemoAppContext(DemoAppContext** outCtx)
@@ -31,6 +33,7 @@ void destroyDemoAppContext(DemoAppContext* ctx)
 	if (!ctx)
 		return;
 	destroyInputManager(ctx->inputManager);
+	debugDrawDestroyContext(ctx->debugDrawContext);
 	rhiDestroyDevice(ctx->rhiDevice);
 	if (ctx->hwnd)
 		DestroyWindow(ctx->hwnd);
@@ -101,6 +104,10 @@ DemoAppResult createDemoAppWindow(DemoAppContext* ctx, const char* title, int cl
 		ctx->hwnd = nullptr;
 		return DemoAppResult::Failed;
 	}
+
+	DebugDrawCreateParams debugDrawParams;
+	debugDrawParams.device = ctx->rhiDevice;
+	ctx->debugDrawContext = debugDrawCreateContext(debugDrawParams);
 
 	ShowWindow(ctx->hwnd, SW_SHOWDEFAULT);
 	UpdateWindow(ctx->hwnd);
