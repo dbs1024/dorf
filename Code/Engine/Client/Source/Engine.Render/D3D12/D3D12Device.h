@@ -128,6 +128,13 @@ struct RhiDevice
 
 static_assert(std::is_trivially_default_constructible_v<RhiDevice> && std::is_trivially_destructible_v<RhiDevice>);
 
+struct RhiSampler
+{
+	RhiDescriptorHandle samplerHandle;
+};
+
+static_assert(std::is_trivially_default_constructible_v<RhiSampler> && std::is_trivially_destructible_v<RhiSampler>);
+
 RhiError createCommandQueue(RhiCommandQueue& outQueue, ID3D12Device_t* device, D3D12_COMMAND_LIST_TYPE type);
 void     destroyCommandQueue(RhiCommandQueue* queue);
 void     garbageCollectCommandQueue(RhiCommandQueue* queue);

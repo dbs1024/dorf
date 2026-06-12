@@ -200,10 +200,11 @@ void rhiCloseCommandList(RhiCommandList* commandList)
 	commandList->isOpen = false;
 }
 
-void rhiExecuteCommandList(RhiDevice* device, RhiCommandList* commandList)
+void rhiExecuteCommandList(RhiCommandList* commandList)
 {
 	ACE_ASSERT(!commandList->isOpen);
 
+	RhiDevice* device = commandList->device;
 	RhiCommandQueue& queue = (commandList->type == RhiCommandListType::Compute) ? device->computeQueue : device->graphicsQueue;
 
 	ID3D12CommandList* lists[] = { commandList->commandList };

@@ -16,6 +16,7 @@ set(SOURCES
 	Source/Engine.Render/D3D12/D3D12CommandQueue.cpp
 	Source/Engine.Render/D3D12/D3D12DescriptorHeap.cpp
 	Source/Engine.Render/D3D12/D3D12RingBuffer.cpp
+	Source/Engine.Render/D3D12/D3D12Sampler.cpp
 )
 
 add_library(Ace.Engine.Client STATIC ${HEADERS} ${SOURCES})

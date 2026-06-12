@@ -27,7 +27,7 @@ int main()
 		rhiTransitionState(cmdList, backBuffer, RhiResourceState::Present);
 
 		rhiCloseCommandList(cmdList);
-		rhiExecuteCommandList(rhiDevice, cmdList);
+		rhiExecuteCommandList(cmdList);
 
 		rhiEndFrame(rhiDevice);
 	}

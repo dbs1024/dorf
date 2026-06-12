@@ -3,6 +3,7 @@
 
 struct DebugDrawContext;
 struct RhiDevice;
+struct RhiSampler;
 
 struct DebugDrawCreateParams
 {
