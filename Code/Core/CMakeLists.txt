@@ -2,6 +2,7 @@
 set(HEADERS
 	Include/Core.ArgParser/ArgParser.h
 	Include/Core.Base/Assert.h
+	Include/Core.Base/Types.h
 	Include/Core.Color/Color.h
 	Include/Core.Logger/Logger.h
 	Include/Core.Math/MathUtil.h
