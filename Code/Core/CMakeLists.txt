@@ -10,6 +10,7 @@ set(HEADERS
 	Include/Core.Math/Vector4f.h
 	Include/Core.Memory/FixedItemPool.h
 	Include/Core.Memory/RangePool.h
+	Include/Core.Memory/SlabAllocator.h
 	Include/Core.UnitTest/UnitTest.h
 	Include/Core.Vfs/Vfs.h
 )
@@ -19,6 +20,7 @@ set(SOURCES
 	Source/Core.Logger/Logger.cpp
 	Source/Core.Memory/FixedItemPool.cpp
 	Source/Core.Memory/RangePool.cpp
+	Source/Core.Memory/SlabAllocator.cpp
 	Source/Core.UnitTest/UnitTest.cpp
 	Source/Core.Vfs/DiskFileSystem.cpp
 	Source/Core.Vfs/Vfs.cpp
