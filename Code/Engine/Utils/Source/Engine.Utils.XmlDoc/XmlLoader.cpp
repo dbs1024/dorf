@@ -124,11 +124,10 @@ namespace
 		return true;
 	}
 
-	XmlResult parseTagTail(const char*& p, XmlDocument* doc, FixedItemHandle elemHandle, bool& outSelfClosing)
+	XmlResult parseTagTail(const char*& p, XmlDocument* doc, XmlNode* elem, bool& outSelfClosing)
 	{
 		outSelfClosing = false;
-		XmlNode*     elem     = static_cast<XmlNode*>(getFixedItemPtr(doc->nodePool, elemHandle));
-		FixedItemHandle lastAttr = InvalidFixedItemHandle;
+		XmlAttribute* lastAttr = nullptr;
 
 		while (*p)
 		{
@@ -162,38 +161,32 @@ namespace
 			const char* valueCopy = doc->dataCurr;
 			doc->dataCurr += attrValueLen + 1;
 
-			FixedItemHandle attrHandle;
-			XmlAttribute* attr = static_cast<XmlAttribute*>(allocFixedItem(attrHandle, doc->attributePool));
+			XmlAttribute* attr = static_cast<XmlAttribute*>(slabCacheAlloc(doc->attributePool));
 			if (!attr) return XmlResult::InternalError;
 			attr->name          = nameCopy;
 			attr->value         = valueCopy;
-			attr->nextAttribute = InvalidFixedItemHandle;
+			attr->nextAttribute = nullptr;
 
-			if (lastAttr != InvalidFixedItemHandle)
-			{
-				XmlAttribute* last = static_cast<XmlAttribute*>(getFixedItemPtr(doc->attributePool, lastAttr));
-				last->nextAttribute = attrHandle;
-			}
+			if (lastAttr)
+				lastAttr->nextAttribute = attr;
 			else
-			{
-				elem->firstAttribute = attrHandle;
-			}
-			lastAttr = attrHandle;
+				elem->firstAttribute = attr;
+			lastAttr = attr;
 		}
 		return XmlResult::ParseError;
 	}
 
 	XmlResult parseXmlDoc(XmlDocument* doc, const char* str)
 	{
-		const char*     p        = str;
-		FixedItemHandle stackTop = InvalidFixedItemHandle;
-		bool            hasRoot  = false;
+		const char* p        = str;
+		XmlNode*    stackTop = nullptr;
+		bool        hasRoot  = false;
 
 		while (*p)
 		{
 			if (*p != '<')
 			{
-				if (stackTop == InvalidFixedItemHandle)
+				if (!stackTop)
 				{
 					if (isSpace(*p)) { ++p; continue; }
 					return XmlResult::ParseError;
@@ -219,30 +212,23 @@ namespace
 				memcpy(doc->dataCurr, textStart, textLen);
 				doc->dataCurr[textLen] = '\0';
 
-				FixedItemHandle textHandle;
-				XmlNode* textNode = static_cast<XmlNode*>(allocFixedItem(textHandle, doc->nodePool));
+				XmlNode* textNode = static_cast<XmlNode*>(slabCacheAlloc(doc->nodePool));
 				if (!textNode) return XmlResult::InternalError;
 				textNode->type           = XmlNodeType::Text;
 				textNode->text           = doc->dataCurr;
 				doc->dataCurr           += textLen + 1;
 				textNode->parent         = stackTop;
-				textNode->nextSibling    = InvalidFixedItemHandle;
+				textNode->nextSibling    = nullptr;
 				textNode->tagName        = nullptr;
-				textNode->firstChild     = InvalidFixedItemHandle;
-				textNode->lastChild      = InvalidFixedItemHandle;
-				textNode->firstAttribute = InvalidFixedItemHandle;
+				textNode->firstChild     = nullptr;
+				textNode->lastChild      = nullptr;
+				textNode->firstAttribute = nullptr;
 
-				XmlNode* textParent = static_cast<XmlNode*>(getFixedItemPtr(doc->nodePool, stackTop));
-				if (textParent->lastChild != InvalidFixedItemHandle)
-				{
-					XmlNode* lastChild = static_cast<XmlNode*>(getFixedItemPtr(doc->nodePool, textParent->lastChild));
-					lastChild->nextSibling = textHandle;
-				}
+				if (stackTop->lastChild)
+					stackTop->lastChild->nextSibling = textNode;
 				else
-				{
-					textParent->firstChild = textHandle;
-				}
-				textParent->lastChild = textHandle;
+					stackTop->firstChild = textNode;
+				stackTop->lastChild = textNode;
 				continue;
 			}
 
@@ -257,13 +243,12 @@ namespace
 				if (*p != '>') return XmlResult::ParseError;
 				++p;
 
-				if (stackTop == InvalidFixedItemHandle) return XmlResult::ParseError;
+				if (!stackTop) return XmlResult::ParseError;
 
-				XmlNode* elem = static_cast<XmlNode*>(getFixedItemPtr(doc->nodePool, stackTop));
-				if (memcmp(elem->tagName, name, len) != 0 || elem->tagName[len] != '\0')
+				if (memcmp(stackTop->tagName, name, len) != 0 || stackTop->tagName[len] != '\0')
 					return XmlResult::ParseError;
 
-				stackTop = elem->parent;
+				stackTop = stackTop->parent;
 			}
 			else if (*p == '!')
 			{
@@ -275,13 +260,13 @@ namespace
 				}
 				else if (strncmp(p, "[CDATA[", 7) == 0)
 				{
-					if (stackTop == InvalidFixedItemHandle) return XmlResult::ParseError;
+					if (!stackTop) return XmlResult::ParseError;
 					p += 7;
 					if (!skipCdata(p)) return XmlResult::ParseError;
 				}
 				else if (strncmp(p, "DOCTYPE", 7) == 0)
 				{
-					if (hasRoot || stackTop != InvalidFixedItemHandle) return XmlResult::ParseError;
+					if (hasRoot || stackTop) return XmlResult::ParseError;
 					p += 7;
 					if (!skipDoctype(p)) return XmlResult::ParseError;
 				}
@@ -294,7 +279,7 @@ namespace
 			}
 			else
 			{
-				if (stackTop == InvalidFixedItemHandle && hasRoot) return XmlResult::ParseError;
+				if (!stackTop && hasRoot) return XmlResult::ParseError;
 
 				const char* name; int len;
 				if (!parseName(p, name, len)) return XmlResult::ParseError;
@@ -304,49 +289,42 @@ namespace
 				memcpy(doc->dataCurr, name, len);
 				doc->dataCurr[len] = '\0';
 
-				FixedItemHandle handle;
-				XmlNode* elem = static_cast<XmlNode*>(allocFixedItem(handle, doc->nodePool));
+				XmlNode* elem = static_cast<XmlNode*>(slabCacheAlloc(doc->nodePool));
 				if (!elem) return XmlResult::InternalError;
 				elem->type           = XmlNodeType::Element;
 				elem->tagName        = doc->dataCurr;
 				doc->dataCurr       += len + 1;
 				elem->text           = nullptr;
 				elem->parent         = stackTop;
-				elem->firstChild     = InvalidFixedItemHandle;
-				elem->lastChild      = InvalidFixedItemHandle;
-				elem->nextSibling    = InvalidFixedItemHandle;
-				elem->firstAttribute = InvalidFixedItemHandle;
+				elem->firstChild     = nullptr;
+				elem->lastChild      = nullptr;
+				elem->nextSibling    = nullptr;
+				elem->firstAttribute = nullptr;
 
-				if (stackTop != InvalidFixedItemHandle)
+				if (stackTop)
 				{
-					XmlNode* parent = static_cast<XmlNode*>(getFixedItemPtr(doc->nodePool, stackTop));
-					if (parent->lastChild != InvalidFixedItemHandle)
-					{
-						XmlNode* lastChild = static_cast<XmlNode*>(getFixedItemPtr(doc->nodePool, parent->lastChild));
-						lastChild->nextSibling = handle;
-					}
+					if (stackTop->lastChild)
+						stackTop->lastChild->nextSibling = elem;
 					else
-					{
-						parent->firstChild = handle;
-					}
-					parent->lastChild = handle;
+						stackTop->firstChild = elem;
+					stackTop->lastChild = elem;
 				}
 				else
 				{
-					doc->root = handle;
+					doc->root = elem;
 					hasRoot   = true;
 				}
 
 				bool selfClosing = false;
-				XmlResult tagResult = parseTagTail(p, doc, handle, selfClosing);
+				XmlResult tagResult = parseTagTail(p, doc, elem, selfClosing);
 				if (tagResult != XmlResult::Ok) return tagResult;
 
 				if (!selfClosing)
-					stackTop = handle;
+					stackTop = elem;
 			}
 		}
 
-		return (stackTop == InvalidFixedItemHandle && hasRoot) ? XmlResult::Ok : XmlResult::ParseError;
+		return (!stackTop && hasRoot) ? XmlResult::Ok : XmlResult::ParseError;
 	}
 }
 

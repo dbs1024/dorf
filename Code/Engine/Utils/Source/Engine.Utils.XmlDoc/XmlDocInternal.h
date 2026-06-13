@@ -2,13 +2,15 @@
 #pragma once
 
 #include "Engine.Utils.XmlDoc/XmlDoc.h"
-#include "Core.Memory/FixedItemPool.h"
+#include "Core.Memory/SlabAllocator.h"
+
+struct XmlNode;
 
 struct XmlAttribute
 {
-	const char*     name;
-	const char*     value;
-	FixedItemHandle nextAttribute;
+	const char*   name;
+	const char*   value;
+	XmlAttribute* nextAttribute;
 };
 
 enum class XmlNodeType
@@ -19,26 +21,26 @@ enum class XmlNodeType
 
 struct XmlNode
 {
-	XmlNodeType     type;
-	FixedItemHandle parent;
-	FixedItemHandle nextSibling;
+	XmlNodeType   type;
+	XmlNode*      parent;
+	XmlNode*      nextSibling;
 
-	const char*     tagName;
-	FixedItemHandle firstChild;
-	FixedItemHandle lastChild;
-	FixedItemHandle firstAttribute;
+	const char*   tagName;
+	XmlNode*      firstChild;
+	XmlNode*      lastChild;
+	XmlAttribute* firstAttribute;
 
-	const char*     text;
+	const char*   text;
 };
 
 struct XmlDocument
 {
-	FixedItemPoolHandle nodePool;
-	FixedItemPoolHandle attributePool;
-	FixedItemHandle     root;
-	char*               dataStart;
-	char*               dataCurr;
-	char*               dataEnd;
+	SlabCache* nodePool;
+	SlabCache* attributePool;
+	XmlNode*   root;
+	char*      dataStart;
+	char*      dataCurr;
+	char*      dataEnd;
 };
 
 XmlResult createXmlDoc(XmlDocument** outDoc);

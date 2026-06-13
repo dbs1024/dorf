@@ -107,6 +107,12 @@ void destroySlabCache(SlabCache* cache)
 	delete cache;
 }
 
+void destroySlabCacheUnchecked(SlabCache* cache)
+{
+	VirtualFree(cache->baseAddress, 0, MEM_RELEASE);
+	delete cache;
+}
+
 namespace
 {
 	Slab* commitSlab(SlabCache* cache)

@@ -16,6 +16,7 @@ struct SlabCacheParams
 
 SlabCache* createSlabCache(const SlabCacheParams& params);
 void       destroySlabCache(SlabCache* cache);
+void       destroySlabCacheUnchecked(SlabCache* cache);
 
 void*      slabCacheAlloc(SlabCache* cache);
 void       slabCacheFree(SlabCache* cache, void* ptr);

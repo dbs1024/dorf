@@ -15,27 +15,18 @@ XmlResult createXmlDoc(XmlDocument** outDoc)
 
 	memset(*outDoc, 0, sizeof(XmlDocument));
 
-	if (createFixedItemPool((*outDoc)->nodePool, sizeof(XmlNode), 65536) != FixedItemPoolResult::Success)
-	{
-		delete *outDoc;
-		*outDoc = nullptr;
-		return XmlResult::InternalError;
-	}
+	SlabCacheParams nodePoolParams = { 65536, sizeof(XmlNode), 1 };
+	(*outDoc)->nodePool = createSlabCache(nodePoolParams);
 
-	if (createFixedItemPool((*outDoc)->attributePool, sizeof(XmlAttribute), 65536) != FixedItemPoolResult::Success)
-	{
-		destroyFixedItemPool((*outDoc)->nodePool);
-		delete *outDoc;
-		*outDoc = nullptr;
-		return XmlResult::InternalError;
-	}
+	SlabCacheParams attributePoolParams = { 65536, sizeof(XmlAttribute), 1 };
+	(*outDoc)->attributePool = createSlabCache(attributePoolParams);
 
 	constexpr int dataBufferSize = 4 * 1024 * 1024;
 	(*outDoc)->dataStart = new (std::nothrow) char[dataBufferSize];
 	if (!(*outDoc)->dataStart)
 	{
-		destroyFixedItemPool((*outDoc)->attributePool);
-		destroyFixedItemPool((*outDoc)->nodePool);
+		destroySlabCacheUnchecked((*outDoc)->attributePool);
+		destroySlabCacheUnchecked((*outDoc)->nodePool);
 		delete *outDoc;
 		*outDoc = nullptr;
 		return XmlResult::InternalError;
@@ -50,17 +41,17 @@ void destroyXmlDoc(XmlDocument* doc)
 {
 	if (!doc)
 		return;
-	destroyFixedItemPool(doc->attributePool);
-	destroyFixedItemPool(doc->nodePool);
+	destroySlabCacheUnchecked(doc->attributePool);
+	destroySlabCacheUnchecked(doc->nodePool);
 	delete[] doc->dataStart;
 	delete doc;
 }
 
 XmlElementHandle getRootXmlElement(XmlDocument* doc)
 {
-	if (!doc || doc->root == InvalidFixedItemHandle)
+	if (!doc || !doc->root)
 		return nullptr;
-	return getFixedItemPtr(doc->nodePool, doc->root);
+	return doc->root;
 }
 
 const char* getXmlElementName(XmlDocument* /*doc*/, XmlElementHandle element)
@@ -70,92 +61,83 @@ const char* getXmlElementName(XmlDocument* /*doc*/, XmlElementHandle element)
 	return node->tagName;
 }
 
-XmlElementHandle getFirstChildXmlElement(XmlDocument* doc, XmlElementHandle element, const char* nameFilter)
+XmlElementHandle getFirstChildXmlElement(XmlDocument* /*doc*/, XmlElementHandle element, const char* nameFilter)
 {
 	XmlNode* node = static_cast<XmlNode*>(element);
 	ACE_ASSERT(node->type == XmlNodeType::Element);
 
-	FixedItemHandle childHandle = node->firstChild;
-	while (childHandle != InvalidFixedItemHandle)
+	XmlNode* child = node->firstChild;
+	while (child)
 	{
-		XmlNode* child = static_cast<XmlNode*>(getFixedItemPtr(doc->nodePool, childHandle));
 		if (child->type == XmlNodeType::Element)
 		{
 			if (!nameFilter || strcmp(child->tagName, nameFilter) == 0)
 				return child;
 		}
-		childHandle = child->nextSibling;
+		child = child->nextSibling;
 	}
 	return nullptr;
 }
 
-XmlElementHandle getNextSiblingXmlElement(XmlDocument* doc, XmlElementHandle element, const char* nameFilter)
+XmlElementHandle getNextSiblingXmlElement(XmlDocument* /*doc*/, XmlElementHandle element, const char* nameFilter)
 {
 	XmlNode* node = static_cast<XmlNode*>(element);
 	ACE_ASSERT(node->type == XmlNodeType::Element);
 
-	FixedItemHandle siblingHandle = node->nextSibling;
-	while (siblingHandle != InvalidFixedItemHandle)
+	XmlNode* sibling = node->nextSibling;
+	while (sibling)
 	{
-		XmlNode* sibling = static_cast<XmlNode*>(getFixedItemPtr(doc->nodePool, siblingHandle));
 		if (sibling->type == XmlNodeType::Element)
 		{
 			if (!nameFilter || strcmp(sibling->tagName, nameFilter) == 0)
 				return sibling;
 		}
-		siblingHandle = sibling->nextSibling;
+		sibling = sibling->nextSibling;
 	}
 	return nullptr;
 }
 
-const char* getXmlText(XmlDocument* doc, XmlElementHandle element)
+const char* getXmlText(XmlDocument* /*doc*/, XmlElementHandle element)
 {
 	XmlNode* node = static_cast<XmlNode*>(element);
 	ACE_ASSERT(node->type == XmlNodeType::Element);
 
-	FixedItemHandle childHandle = node->firstChild;
-	while (childHandle != InvalidFixedItemHandle)
+	XmlNode* child = node->firstChild;
+	while (child)
 	{
-		XmlNode* child = static_cast<XmlNode*>(getFixedItemPtr(doc->nodePool, childHandle));
 		if (child->type == XmlNodeType::Text)
 			return child->text;
-		childHandle = child->nextSibling;
+		child = child->nextSibling;
 	}
 	return nullptr;
 }
 
-XmlAttributeHandle getXmlAttribute(XmlDocument* doc, XmlElementHandle element, const char* name)
+XmlAttributeHandle getXmlAttribute(XmlDocument* /*doc*/, XmlElementHandle element, const char* name)
 {
 	XmlNode* node = static_cast<XmlNode*>(element);
 	ACE_ASSERT(node->type == XmlNodeType::Element);
 
-	FixedItemHandle attrHandle = node->firstAttribute;
-	while (attrHandle != InvalidFixedItemHandle)
+	XmlAttribute* attr = node->firstAttribute;
+	while (attr)
 	{
-		XmlAttribute* attr = static_cast<XmlAttribute*>(getFixedItemPtr(doc->attributePool, attrHandle));
 		if (strcmp(attr->name, name) == 0)
 			return attr;
-		attrHandle = attr->nextAttribute;
+		attr = attr->nextAttribute;
 	}
 	return nullptr;
 }
 
-XmlAttributeHandle getFirstXmlAttribute(XmlDocument* doc, XmlElementHandle element)
+XmlAttributeHandle getFirstXmlAttribute(XmlDocument* /*doc*/, XmlElementHandle element)
 {
 	XmlNode* node = static_cast<XmlNode*>(element);
 	ACE_ASSERT(node->type == XmlNodeType::Element);
 
-	if (node->firstAttribute == InvalidFixedItemHandle)
-		return nullptr;
-	return getFixedItemPtr(doc->attributePool, node->firstAttribute);
+	return node->firstAttribute;
 }
 
-XmlAttributeHandle getNextXmlAttribute(XmlDocument* doc, XmlAttributeHandle attr)
+XmlAttributeHandle getNextXmlAttribute(XmlDocument* /*doc*/, XmlAttributeHandle attr)
 {
-	FixedItemHandle nextHandle = static_cast<XmlAttribute*>(attr)->nextAttribute;
-	if (nextHandle == InvalidFixedItemHandle)
-		return nullptr;
-	return getFixedItemPtr(doc->attributePool, nextHandle);
+	return static_cast<XmlAttribute*>(attr)->nextAttribute;
 }
 
 const char* getXmlAttributeName(XmlDocument* /*doc*/, XmlAttributeHandle attr)
