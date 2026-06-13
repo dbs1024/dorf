@@ -2,7 +2,7 @@
 #include "Engine.Render/Rhi/RhiDevice.h"
 #include "D3D12Device.h"
 
-#include "Core.Math/MathUtil.h"
+#include "Core.Base/Misc.h"
 
 #include <cstring>
 

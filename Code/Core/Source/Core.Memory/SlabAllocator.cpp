@@ -2,16 +2,12 @@
 #include "Core.Memory/SlabAllocator.h"
 
 #include "Core.Base/Assert.h"
+#include "Core.Base/Misc.h"
 #include <cstring>
 #include <windows.h>
 
 namespace
 {
-	size_t alignUp(size_t n, size_t a)
-	{
-		return (n + a - 1) & ~(a - 1);
-	}
-
 #ifdef _DEBUG
 	constexpr unsigned char FreedItemPoison     = 0xFD;
 	constexpr unsigned char AllocatedItemPoison = 0xFA;
@@ -70,7 +66,7 @@ SlabCache* createSlabCache(const SlabCacheParams& params)
 	GetSystemInfo(&systemInfo);
 	ACE_ASSERT(SlabAllocatorPageSize == systemInfo.dwPageSize);
 
-	size_t itemStride = alignUp(params.itemSize, 16);
+	size_t itemStride = alignUp<size_t>(params.itemSize, 16);
 	size_t slabSize   = static_cast<size_t>(params.pagesPerSlab) * SlabAllocatorPageSize;
 	size_t headerSize = alignUp(sizeof(Slab), itemStride);
 

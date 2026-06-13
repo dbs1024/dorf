@@ -145,21 +145,6 @@ static void testVector4fScalarMultiplyAssign(UnitTestContext* ctx)
 	UNIT_TEST_EXPECT(ctx, a.w == 8.0f);
 }
 
-static void testClampWithinRange(UnitTestContext* ctx)
-{
-	UNIT_TEST_EXPECT(ctx, clamp(5, 1, 10) == 5);
-}
-
-static void testClampBelowMin(UnitTestContext* ctx)
-{
-	UNIT_TEST_EXPECT(ctx, clamp(0, 1, 10) == 1);
-}
-
-static void testClampAboveMax(UnitTestContext* ctx)
-{
-	UNIT_TEST_EXPECT(ctx, clamp(11, 1, 10) == 10);
-}
-
 void registerMathTests(UnitTestContext* ctx)
 {
 	UnitTestSuiteHandle mathSuite;
@@ -187,11 +172,4 @@ void registerMathTests(UnitTestContext* ctx)
 	createUnitTest(h, ctx, "AddAssign",             testVector4fAddAssign,             vector4fSuite);
 	createUnitTest(h, ctx, "SubtractAssign",        testVector4fSubtractAssign,        vector4fSuite);
 	createUnitTest(h, ctx, "ScalarMultiplyAssign",  testVector4fScalarMultiplyAssign,  vector4fSuite);
-
-	UnitTestSuiteHandle mathUtilSuite;
-	createUnitTestSuite(mathUtilSuite, ctx, "MathUtil", mathSuite);
-
-	createUnitTest(h, ctx, "ClampWithinRange", testClampWithinRange, mathUtilSuite);
-	createUnitTest(h, ctx, "ClampBelowMin",    testClampBelowMin,    mathUtilSuite);
-	createUnitTest(h, ctx, "ClampAboveMax",    testClampAboveMax,    mathUtilSuite);
 }

@@ -40,13 +40,3 @@ inline bool almostEqual(double x, double y)
 	uint64_t dist    = (biasedX >= biasedY) ? (biasedX - biasedY) : (biasedY - biasedX);
 	return dist <= kMaxUlps;
 }
-
-template <typename T>
-inline T clamp(T value, T min, T max)
-{
-	if (value < min)
-		return min;
-	if (value > max)
-		return max;
-	return value;
-}

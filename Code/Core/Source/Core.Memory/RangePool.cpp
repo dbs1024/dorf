@@ -1,6 +1,7 @@
 // Copyright (c) Darrin Stewart. All rights reserved.
 #include "Core.Memory/RangePool.h"
 
+#include "Core.Base/Misc.h"
 #include <new>
 
 namespace
@@ -27,11 +28,6 @@ namespace
 		int spanCount;
 		int alignment;
 	};
-
-	size_t alignUp(size_t n, size_t a)
-	{
-		return (n + a - 1) & ~(a - 1);
-	}
 
 	Span* getSpans(RangePool* pool)
 	{

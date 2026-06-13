@@ -1,6 +1,7 @@
 // Copyright (c) Darrin Stewart. All rights reserved.
 #include "Core.Memory/FixedItemPool.h"
 
+#include "Core.Base/Misc.h"
 #include <cstring>
 #include <new>
 
@@ -21,11 +22,6 @@ namespace
 		int freeCount;
 		int alignment;
 	};
-
-	size_t alignUp(size_t n, size_t a)
-	{
-		return (n + a - 1) & ~(a - 1);
-	}
 
 	int* getFreeStack(FixedItemPool* pool)
 	{
