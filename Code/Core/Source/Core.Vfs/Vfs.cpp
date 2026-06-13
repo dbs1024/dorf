@@ -1,7 +1,7 @@
 // Copyright (c) Darrin Stewart. All rights reserved.
 #include "Core.Vfs/Vfs.h"
 
-#include "Core.Memory/FixedItemPool.h"
+#include "Core.Memory/SlabAllocator.h"
 
 #include <cstdio>
 #include <cstring>
@@ -14,41 +14,39 @@ struct VfsMount
 	VfsBackendOps       ops;
 	void*               backendCtx;
 	int                 priority;
-	FixedItemPoolHandle filePool;
-	FixedItemPoolHandle dirPool;
-	FixedItemPoolHandle requestPool;
+	Vfs*                owner;
 };
 
-static const unsigned int MaxVfsMounts          = 8;
-static const int          MaxVfsFilesPerMount    = 1024;
-static const int          MaxVfsDirsPerMount     = 1024;
-static const int          MaxVfsRequestsPerMount = 1024;
+static const unsigned int MaxVfsMounts   = 8;
+static const int          MaxVfsFiles    = 2048;
+static const int          MaxVfsDirs     = 2048;
+static const int          MaxVfsRequests = 2048;
 
 struct Vfs
 {
 	VfsMount     mounts[MaxVfsMounts];
 	unsigned int mountCount;
+	SlabCache*   filePool;
+	SlabCache*   dirPool;
+	SlabCache*   requestPool;
 };
 
 struct VfsFile
 {
 	VfsBackendFileHandle backendFile;
 	VfsMount*            mount;
-	FixedItemHandle      filePoolHandle;
 };
 
 struct VfsDir
 {
 	VfsBackendDirHandle backendDir;
 	VfsMount*           mount;
-	FixedItemHandle     dirPoolHandle;
 };
 
 struct VfsRequest
 {
 	VfsBackendRequestHandle backendRequest;
 	VfsMount*               mount;
-	FixedItemHandle         requestPoolHandle;
 };
 
 static VfsMount* findMount(Vfs* vfs, const char* path, const char** outRelativePath)
@@ -92,6 +90,15 @@ VfsResult vfsCreate(Vfs** outVfs)
 
 	memset(vfs, 0, sizeof(Vfs));
 
+	SlabCacheParams filePoolParams = { MaxVfsFiles, sizeof(VfsFile), 1 };
+	vfs->filePool = createSlabCache(filePoolParams);
+
+	SlabCacheParams dirPoolParams = { MaxVfsDirs, sizeof(VfsDir), 1 };
+	vfs->dirPool = createSlabCache(dirPoolParams);
+
+	SlabCacheParams requestPoolParams = { MaxVfsRequests, sizeof(VfsRequest), 1 };
+	vfs->requestPool = createSlabCache(requestPoolParams);
+
 	*outVfs = vfs;
 	return VfsResult::Ok;
 }
@@ -106,11 +113,11 @@ void vfsDestroy(Vfs* vfs)
 		VfsMount* mount = &vfs->mounts[i];
 		if (mount->ops.unmount != nullptr)
 			mount->ops.unmount(mount->backendCtx);
-		destroyFixedItemPool(mount->filePool);
-		destroyFixedItemPool(mount->dirPool);
-		destroyFixedItemPool(mount->requestPool);
 	}
 
+	destroySlabCache(vfs->filePool);
+	destroySlabCache(vfs->dirPool);
+	destroySlabCache(vfs->requestPool);
 	delete vfs;
 }
 
@@ -129,36 +136,13 @@ VfsResult vfsMountCustom(Vfs* vfs, const char* mountPath, const char* backendPat
 	mount->ops        = *ops;
 	mount->backendCtx = backendCtx;
 	mount->priority   = priority;
+	mount->owner      = vfs;
 
 	if (mount->ops.mount != nullptr)
 	{
 		VfsResult result = mount->ops.mount(backendCtx);
 		if (result != VfsResult::Ok)
 			return result;
-	}
-
-	if (createFixedItemPool(mount->filePool, sizeof(VfsFile), MaxVfsFilesPerMount) != FixedItemPoolResult::Success)
-	{
-		if (mount->ops.unmount != nullptr)
-			mount->ops.unmount(backendCtx);
-		return VfsResult::InternalError;
-	}
-
-	if (createFixedItemPool(mount->dirPool, sizeof(VfsDir), MaxVfsDirsPerMount) != FixedItemPoolResult::Success)
-	{
-		destroyFixedItemPool(mount->filePool);
-		if (mount->ops.unmount != nullptr)
-			mount->ops.unmount(backendCtx);
-		return VfsResult::InternalError;
-	}
-
-	if (createFixedItemPool(mount->requestPool, sizeof(VfsRequest), MaxVfsRequestsPerMount) != FixedItemPoolResult::Success)
-	{
-		destroyFixedItemPool(mount->filePool);
-		destroyFixedItemPool(mount->dirPool);
-		if (mount->ops.unmount != nullptr)
-			mount->ops.unmount(backendCtx);
-		return VfsResult::InternalError;
 	}
 
 	vfs->mountCount++;
@@ -202,9 +186,6 @@ VfsResult vfsUnmount(Vfs* vfs, const char* mountPath, const char* backendPath)
 		if (mount->ops.unmount != nullptr)
 			mount->ops.unmount(mount->backendCtx);
 
-		destroyFixedItemPool(mount->filePool);
-		destroyFixedItemPool(mount->dirPool);
-		destroyFixedItemPool(mount->requestPool);
 		vfs->mounts[i] = vfs->mounts[--vfs->mountCount];
 		return VfsResult::Ok;
 	}
@@ -230,8 +211,7 @@ VfsResult vfsOpenFile(VfsFileHandle* outFile, Vfs* vfs, const char* path, VfsOpe
 	if (result != VfsResult::Ok)
 		return result;
 
-	FixedItemHandle fileHandle = InvalidFixedItemHandle;
-	void* ptr = allocFixedItem(fileHandle, mount->filePool);
+	void* ptr = slabCacheAlloc(vfs->filePool);
 	if (ptr == nullptr)
 	{
 		if (mount->ops.closeFile != nullptr)
@@ -240,9 +220,8 @@ VfsResult vfsOpenFile(VfsFileHandle* outFile, Vfs* vfs, const char* path, VfsOpe
 	}
 
 	VfsFile* file = (VfsFile*)ptr;
-	file->backendFile    = backendFile;
-	file->mount          = mount;
-	file->filePoolHandle = fileHandle;
+	file->backendFile = backendFile;
+	file->mount       = mount;
 
 	*outFile = file;
 	return VfsResult::Ok;
@@ -259,7 +238,7 @@ VfsResult vfsCloseFile(VfsFileHandle file)
 	if (mount->ops.closeFile != nullptr)
 		result = mount->ops.closeFile(file->backendFile);
 
-	freeFixedItem(mount->filePool, file->filePoolHandle);
+	slabCacheFree(mount->owner->filePool, file);
 	return result;
 }
 
@@ -373,8 +352,7 @@ VfsResult vfsOpenDir(VfsDirHandle* outDir, Vfs* vfs, const char* path)
 	if (result != VfsResult::Ok)
 		return result;
 
-	FixedItemHandle dirHandle = InvalidFixedItemHandle;
-	void* ptr = allocFixedItem(dirHandle, mount->dirPool);
+	void* ptr = slabCacheAlloc(vfs->dirPool);
 	if (ptr == nullptr)
 	{
 		if (mount->ops.closeDir != nullptr)
@@ -383,9 +361,8 @@ VfsResult vfsOpenDir(VfsDirHandle* outDir, Vfs* vfs, const char* path)
 	}
 
 	VfsDir* dir = (VfsDir*)ptr;
-	dir->backendDir    = backendDir;
-	dir->mount         = mount;
-	dir->dirPoolHandle = dirHandle;
+	dir->backendDir = backendDir;
+	dir->mount      = mount;
 
 	*outDir = dir;
 	return VfsResult::Ok;
@@ -414,7 +391,7 @@ VfsResult vfsCloseDir(VfsDirHandle dir)
 	if (mount->ops.closeDir != nullptr)
 		result = mount->ops.closeDir(dir->backendDir);
 
-	freeFixedItem(mount->dirPool, dir->dirPoolHandle);
+	slabCacheFree(mount->owner->dirPool, dir);
 	return result;
 }
 
@@ -435,8 +412,7 @@ VfsResult vfsReadFileAsync(VfsRequestHandle* outRequest, VfsFileHandle file,
 	if (result != VfsResult::Ok)
 		return result;
 
-	FixedItemHandle requestHandle = InvalidFixedItemHandle;
-	void* ptr = allocFixedItem(requestHandle, mount->requestPool);
+	void* ptr = slabCacheAlloc(mount->owner->requestPool);
 	if (ptr == nullptr)
 	{
 		if (mount->ops.destroyRequest != nullptr)
@@ -445,9 +421,8 @@ VfsResult vfsReadFileAsync(VfsRequestHandle* outRequest, VfsFileHandle file,
 	}
 
 	VfsRequest* request = (VfsRequest*)ptr;
-	request->backendRequest    = backendRequest;
-	request->mount             = file->mount;
-	request->requestPoolHandle = requestHandle;
+	request->backendRequest = backendRequest;
+	request->mount          = file->mount;
 
 	*outRequest = request;
 	return VfsResult::Ok;
@@ -484,5 +459,5 @@ void vfsDestroyRequest(VfsRequestHandle request)
 	if (mount->ops.destroyRequest != nullptr)
 		mount->ops.destroyRequest(request->backendRequest);
 
-	freeFixedItem(mount->requestPool, request->requestPoolHandle);
+	slabCacheFree(mount->owner->requestPool, request);
 }
