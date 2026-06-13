@@ -8,18 +8,18 @@ set(HEADERS
 	Include/Core.Math/MathUtil.h
 	Include/Core.Math/Vector3f.h
 	Include/Core.Math/Vector4f.h
+	Include/Core.Memory/FixedItemPool.h
+	Include/Core.Memory/RangePool.h
 	Include/Core.UnitTest/UnitTest.h
-	Include/Core.Util/FixedItemPool.h
-	Include/Core.Util/RangePool.h
 	Include/Core.Vfs/Vfs.h
 )
 
 set(SOURCES
 	Source/Core.ArgParser/ArgParser.cpp
 	Source/Core.Logger/Logger.cpp
+	Source/Core.Memory/FixedItemPool.cpp
+	Source/Core.Memory/RangePool.cpp
 	Source/Core.UnitTest/UnitTest.cpp
-	Source/Core.Util/FixedItemPool.cpp
-	Source/Core.Util/RangePool.cpp
 	Source/Core.Vfs/DiskFileSystem.cpp
 	Source/Core.Vfs/Vfs.cpp
 )

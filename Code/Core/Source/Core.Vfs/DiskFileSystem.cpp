@@ -1,7 +1,7 @@
 // Copyright (c) Darrin Stewart. All rights reserved.
 #include "Core.Vfs/Vfs.h"
 
-#include "Core.Util/FixedItemPool.h"
+#include "Core.Memory/FixedItemPool.h"
 
 #include <cstdio>
 #include <cstring>

@@ -1,7 +1,7 @@
 // Copyright (c) Darrin Stewart. All rights reserved.
 #pragma once
 
-#include "Core.Util/FixedItemPool.h"
+#include "Core.Memory/FixedItemPool.h"
 
 #include <d3d12.h>
 #include <dxgi1_4.h>

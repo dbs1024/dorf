@@ -3,7 +3,7 @@
 
 #include "ShaderPipeline.h"
 
-#include "Core.Util/FixedItemPool.h"
+#include "Core.Memory/FixedItemPool.h"
 
 #include <cstring>
 

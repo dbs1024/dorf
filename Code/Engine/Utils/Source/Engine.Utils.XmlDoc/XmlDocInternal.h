@@ -2,7 +2,7 @@
 #pragma once
 
 #include "Engine.Utils.XmlDoc/XmlDoc.h"
-#include "Core.Util/FixedItemPool.h"
+#include "Core.Memory/FixedItemPool.h"
 
 struct XmlAttribute
 {

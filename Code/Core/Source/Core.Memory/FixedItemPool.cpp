@@ -1,5 +1,5 @@
 // Copyright (c) Darrin Stewart. All rights reserved.
-#include "Core.Util/FixedItemPool.h"
+#include "Core.Memory/FixedItemPool.h"
 
 #include <cstring>
 #include <new>
