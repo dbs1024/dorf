@@ -3,7 +3,7 @@
 
 #include "Core.Logger/Logger.h"
 #include "Core.Vfs/Vfs.h"
-#include "Engine.Render/RhiDecls.h"
+#include "Engine.Render.Base/RhiDecls.h"
 
 #include <cstdio>
 #include <cstring>

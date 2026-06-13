@@ -1,6 +1,6 @@
 # Copyright (c) Darrin Stewart. All rights reserved.
 set(HEADERS
-	Include/Engine.Render/RhiDecls.h
+	Include/Engine.Render.Base/RhiDecls.h
 )
 
 add_library(Ace.Engine.Base INTERFACE)
