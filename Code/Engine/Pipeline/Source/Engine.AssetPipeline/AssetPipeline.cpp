@@ -3,16 +3,9 @@
 
 #include "ShaderPipeline.h"
 
-#include "Core.Memory/FixedItemPool.h"
+#include "Core.Memory/SlabAllocator.h"
 
 #include <cstring>
-
-struct AssetPipelineRegistry
-{
-	FixedItemPoolHandle  pool;
-	int                  count;
-	ShaderPipelineHandle shaderPipeline;
-};
 
 namespace
 {
@@ -24,8 +17,20 @@ namespace
 		char                 type[MaxAssetPipelineTypeLength + 1];
 		AssetPipelineBuildFn build;
 		void*                userData;
+		AssetPipelineEntry*  next;
 	};
+}
 
+struct AssetPipelineRegistry
+{
+	SlabCache*           pool;
+	AssetPipelineEntry*  firstEntry;
+	AssetPipelineEntry*  lastEntry;
+	ShaderPipelineHandle shaderPipeline;
+};
+
+namespace
+{
 	bool isReservedWindowsName(const char* name, size_t length)
 	{
 		static const char* const reservedNames[] =
@@ -111,9 +116,8 @@ namespace
 
 	AssetPipelineEntry* findAssetPipelineEntry(AssetPipelineRegistryHandle registry, const char* type)
 	{
-		for (int i = 1; i <= registry->count; ++i)
+		for (AssetPipelineEntry* entry = registry->firstEntry; entry != nullptr; entry = entry->next)
 		{
-			AssetPipelineEntry* entry = static_cast<AssetPipelineEntry*>(getFixedItemPtr(registry->pool, i));
 			if (strcmp(entry->type, type) == 0)
 				return entry;
 		}
@@ -140,13 +144,8 @@ AssetPipelineResult createAssetPipelineRegistry(AssetPipelineRegistryHandle* out
 	AssetPipelineRegistry* registry = new AssetPipelineRegistry;
 	memset(registry, 0, sizeof(AssetPipelineRegistry));
 
-	FixedItemPoolResult poolResult = createFixedItemPool(registry->pool, sizeof(AssetPipelineEntry), MaxAssetPipelines);
-	if (poolResult != FixedItemPoolResult::Success)
-	{
-		delete registry;
-		*outRegistry = InvalidAssetPipelineRegistryHandle;
-		return AssetPipelineResult::InternalError;
-	}
+	SlabCacheParams poolParams = { MaxAssetPipelines, sizeof(AssetPipelineEntry), 1 };
+	registry->pool = createSlabCache(poolParams);
 
 	if (createAndRegisterBuiltInPipelines(registry) != AssetPipelineResult::Ok)
 	{
@@ -164,7 +163,7 @@ void destroyAssetPipelineRegistry(AssetPipelineRegistryHandle registry)
 	if (!registry)
 		return;
 
-	destroyFixedItemPool(registry->pool);
+	destroySlabCacheUnchecked(registry->pool);
 	destroyBuiltInPipelines(registry);
 	delete registry;
 }
@@ -181,8 +180,7 @@ AssetPipelineResult registerAssetPipeline(AssetPipelineRegistryHandle registry, 
 	if (findAssetPipelineEntry(registry, desc->type) != nullptr)
 		return AssetPipelineResult::DuplicateType;
 
-	FixedItemHandle item;
-	void* slot = allocFixedItem(item, registry->pool);
+	void* slot = slabCacheAlloc(registry->pool);
 	if (!slot)
 		return AssetPipelineResult::OutOfResources;
 
@@ -192,7 +190,12 @@ AssetPipelineResult registerAssetPipeline(AssetPipelineRegistryHandle registry, 
 	entry->build    = desc->build;
 	entry->userData = desc->userData;
 
-	registry->count = item;
+	if (registry->lastEntry)
+		registry->lastEntry->next = entry;
+	else
+		registry->firstEntry = entry;
+	registry->lastEntry = entry;
+
 	return AssetPipelineResult::Ok;
 }
 
