@@ -192,8 +192,8 @@ static RhiError initSwapChain(RhiDevice* device, IDXGIFactory7* factory, const R
 
 	for (unsigned i = 0; i < kRhiSwapChainImageCount; ++i)
 	{
-		void* ptr = allocFixedItem(device->swapChainImages[i], device->resourcePool);
-		RhiResource* resource = static_cast<RhiResource*>(ptr);
+		RhiResource* resource = static_cast<RhiResource*>(slabCacheAlloc(device->resourcePool));
+		device->swapChainImages[i] = resource;
 		hr = device->swapChain->GetBuffer(i, IID_PPV_ARGS(&resource->resource));
 		if (FAILED(hr))
 		{
@@ -235,9 +235,8 @@ RhiError rhiCreateDevice(RhiDevice** outDevice, const RhiDeviceCreateParams& par
 	RhiDevice* device = new RhiDevice;
 	memset(device, 0, sizeof(*device));
 	device->window = params.window;
-	createFixedItemPool(device->resourcePool, sizeof(RhiResource), 65536);
-	for (unsigned i = 0; i < kRhiSwapChainImageCount; ++i)
-		device->swapChainImages[i] = InvalidFixedItemHandle;
+	SlabCacheParams resourcePoolParams = { 65536, sizeof(RhiResource), 1 };
+	device->resourcePool = createSlabCache(resourcePoolParams);
 
 	ComPtr<IDXGIFactory7> factory = initD3dDevice(device, params);
 	if (!factory)
@@ -283,13 +282,13 @@ void rhiDestroyDevice(RhiDevice* device)
 
 	for (unsigned i = 0; i < kRhiSwapChainImageCount; ++i)
 	{
-		if (device->swapChainImages[i] == InvalidFixedItemHandle)
+		RhiResource* resource = device->swapChainImages[i];
+		if (!resource)
 			continue;
-		RhiResource* resource = static_cast<RhiResource*>(getFixedItemPtr(device->resourcePool, device->swapChainImages[i]));
 		freePersistentDescriptor(&device->cpuRtvHeap, resource->rtvHandle);
 		if (resource->resource)
 			resource->resource->Release();
-		freeFixedItem(device->resourcePool, device->swapChainImages[i]);
+		slabCacheFree(device->resourcePool, resource);
 	}
 	if (device->swapChain)
 	{
@@ -314,7 +313,7 @@ void rhiDestroyDevice(RhiDevice* device)
 	destroyDescriptorHeap(&device->cpuDsvHeap);
 	destroyDescriptorHeap(&device->gpuCbvSrvUavHeap);
 	destroyDescriptorHeap(&device->gpuSamplerHeap);
-	destroyFixedItemPool(device->resourcePool);
+	destroySlabCache(device->resourcePool);
 	if (device->d3dDevice)
 	{
 		device->d3dDevice->Release();
@@ -355,12 +354,12 @@ void rhiEndFrame(RhiDevice* device)
 RhiResource* rhiGetBackBuffer(RhiDevice* device)
 {
 	unsigned bufferIndex = device->swapChain->GetCurrentBackBufferIndex();
-	return static_cast<RhiResource*>(getFixedItemPtr(device->resourcePool, device->swapChainImages[bufferIndex]));
+	return device->swapChainImages[bufferIndex];
 }
 
-RhiResource* allocResource(RhiResourceHandle& outHandle, RhiDevice* device)
+RhiResource* allocResource(RhiDevice* device)
 {
-	void* ptr = allocFixedItem(outHandle, device->resourcePool);
+	void* ptr = slabCacheAlloc(device->resourcePool);
 	if (!ptr)
 		return nullptr;
 	RhiResource* resource = static_cast<RhiResource*>(ptr);
@@ -368,7 +367,7 @@ RhiResource* allocResource(RhiResourceHandle& outHandle, RhiDevice* device)
 	return resource;
 }
 
-void freeResource(RhiDevice* device, RhiResourceHandle handle)
+void freeResource(RhiDevice* device, RhiResource* resource)
 {
-	freeFixedItem(device->resourcePool, handle);
+	slabCacheFree(device->resourcePool, resource);
 }

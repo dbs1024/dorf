@@ -1,7 +1,8 @@
 // Copyright (c) Darrin Stewart. All rights reserved.
 #pragma once
 
-#include "Core.Memory/FixedItemPool.h"
+#include "Core.Base/Assert.h"
+#include "Core.Memory/SlabAllocator.h"
 
 #include <d3d12.h>
 #include <dxgi1_4.h>
@@ -13,7 +14,6 @@ enum class RhiCommandListType : unsigned;
 
 using ID3D12Device_t = ID3D12Device4;
 using RhiDescriptorHandle = int;
-using RhiResourceHandle = FixedItemHandle;
 
 // Always evaluates expr (an HRESULT-returning expression); asserts on failure in debug builds and ignores the result in retail builds.
 #define ACE_VERIFY_HR(expr) \
@@ -26,7 +26,7 @@ using RhiResourceHandle = FixedItemHandle;
 
 constexpr unsigned kRhiMaxRenderedFrames       = 4;
 constexpr unsigned kRhiSwapChainImageCount     = 2;
-constexpr int      kRhiCommandListPoolSize     = 1024;
+constexpr int      kRhiCommandListPoolSize     = 256;
 constexpr unsigned kRhiInFlightCommandListCount = 1024;
 
 struct RhiResource
@@ -45,7 +45,6 @@ struct RhiCommandList
 	RhiDevice*                 device;
 	RhiCommandListType         type;
 	bool                       isOpen;
-	FixedItemHandle            selfHandle;
 };
 
 static_assert(std::is_trivially_default_constructible_v<RhiCommandList> && std::is_trivially_destructible_v<RhiCommandList>);
@@ -63,7 +62,7 @@ struct RhiCommandQueue
 	ID3D12CommandQueue* queue;
 	ID3D12Fence*        fence;
 	HANDLE              fenceEvent;
-	FixedItemPoolHandle commandListPool;
+	SlabCache*          commandListPool;
 	InFlightCommandList inFlightCommandLists[kRhiInFlightCommandListCount];
 	unsigned            inFlightCommandListCount;
 	uint64_t            lastSubmissionIndex;
@@ -120,8 +119,8 @@ struct RhiDevice
 	RhiDescriptorHeap   cpuDsvHeap;
 	RhiDescriptorHeap   gpuCbvSrvUavHeap;
 	RhiDescriptorHeap   gpuSamplerHeap;
-	RhiResourceHandle   swapChainImages[kRhiSwapChainImageCount];
-	FixedItemPoolHandle resourcePool;
+	RhiResource*        swapChainImages[kRhiSwapChainImageCount];
+	SlabCache*          resourcePool;
 	bool                insideFrame;
 	uint64_t            frameCount;
 };
@@ -150,5 +149,5 @@ void                freePersistentDescriptor(RhiDescriptorHeap* heap, RhiDescrip
 
 D3D12_CPU_DESCRIPTOR_HANDLE getD3D12CpuDescriptorHandle(const RhiDescriptorHeap* heap, RhiDescriptorHandle handle);
 
-RhiResource* allocResource(RhiResourceHandle& outHandle, RhiDevice* device);
-void         freeResource(RhiDevice* device, RhiResourceHandle handle);
+RhiResource* allocResource(RhiDevice* device);
+void         freeResource(RhiDevice* device, RhiResource* resource);

@@ -31,18 +31,15 @@ RhiError createCommandQueue(RhiCommandQueue& outQueue, ID3D12Device_t* device, D
 		return RhiError::Failed;
 	}
 
-	if (createFixedItemPool(outQueue.commandListPool, sizeof(RhiCommandList), kRhiCommandListPoolSize) != FixedItemPoolResult::Success)
-	{
-		printf("createCommandQueue: createFixedItemPool failed\n");
-		return RhiError::Failed;
-	}
+	SlabCacheParams commandListPoolParams = { kRhiCommandListPoolSize, sizeof(RhiCommandList), 1 };
+	outQueue.commandListPool = createSlabCache(commandListPoolParams);
 
 	return RhiError::Ok;
 }
 
 void destroyCommandQueue(RhiCommandQueue* queue)
 {
-	destroyFixedItemPool(queue->commandListPool);
+	destroySlabCache(queue->commandListPool);
 
 	if (queue->fenceEvent)
 	{
@@ -92,7 +89,7 @@ void garbageCollectCommandQueue(RhiCommandQueue* queue)
 		}
 
 		destroyRhiCommandList(inFlight.commandList);
-		freeFixedItem(queue->commandListPool, inFlight.commandList->selfHandle);
+		slabCacheFree(queue->commandListPool, inFlight.commandList);
 
 		queue->inFlightCommandListCount--;
 		queue->inFlightCommandLists[i] = queue->inFlightCommandLists[queue->inFlightCommandListCount];
@@ -114,7 +111,7 @@ void waitForCommandQueueIdle(RhiCommandQueue* queue)
 		ACE_ASSERT(!inFlight.commandList->isOpen);
 
 		destroyRhiCommandList(inFlight.commandList);
-		freeFixedItem(queue->commandListPool, inFlight.commandList->selfHandle);
+		slabCacheFree(queue->commandListPool, inFlight.commandList);
 
 		queue->inFlightCommandListCount--;
 	}
@@ -139,8 +136,7 @@ RhiCommandList* rhiOpenCommandList(RhiDevice* device, RhiCommandListType type)
 	D3D12_COMMAND_LIST_TYPE d3dType = (type == RhiCommandListType::Compute) ? D3D12_COMMAND_LIST_TYPE_COMPUTE : D3D12_COMMAND_LIST_TYPE_DIRECT;
 	RhiCommandQueue& queue = (type == RhiCommandListType::Compute) ? device->computeQueue : device->graphicsQueue;
 
-	FixedItemHandle handle;
-	void* ptr = allocFixedItem(handle, queue.commandListPool);
+	void* ptr = slabCacheAlloc(queue.commandListPool);
 	if (!ptr)
 	{
 		ACE_ASSERT(false);
@@ -151,14 +147,13 @@ RhiCommandList* rhiOpenCommandList(RhiDevice* device, RhiCommandListType type)
 	memset(commandList, 0, sizeof(RhiCommandList));
 	commandList->device = device;
 	commandList->type   = type;
-	commandList->selfHandle = handle;
 
 	HRESULT hr = device->d3dDevice->CreateCommandAllocator(d3dType, IID_PPV_ARGS(&commandList->allocator));
 	if (FAILED(hr))
 	{
 		ACE_ASSERT(false);
 		printf("rhiOpenCommandList: CreateCommandAllocator failed (hr=0x%08X)\n", hr);
-		freeFixedItem(queue.commandListPool, handle);
+		slabCacheFree(queue.commandListPool, commandList);
 		return nullptr;
 	}
 
@@ -168,7 +163,7 @@ RhiCommandList* rhiOpenCommandList(RhiDevice* device, RhiCommandListType type)
 		ACE_ASSERT(false);
 		printf("rhiOpenCommandList: CreateCommandList failed (hr=0x%08X)\n", hr);
 		commandList->allocator->Release();
-		freeFixedItem(queue.commandListPool, handle);
+		slabCacheFree(queue.commandListPool, commandList);
 		return nullptr;
 	}
 
