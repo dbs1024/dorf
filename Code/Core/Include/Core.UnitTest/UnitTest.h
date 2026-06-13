@@ -9,9 +9,11 @@ enum class UnitTestResult : unsigned
 };
 
 struct UnitTestContext;
+struct UnitTestSuite;
+struct UnitTest;
 
-using UnitTestSuiteHandle = int;
-using UnitTestHandle      = int;
+using UnitTestSuiteHandle = UnitTestSuite*;
+using UnitTestHandle      = UnitTest*;
 using UnitTestFn          = void (*)(UnitTestContext*);
 
 using UnitTestSuiteBeginFn  = void (*)(UnitTestSuiteHandle);
@@ -33,8 +35,8 @@ struct UnitTestListener
 	UnitTestCrashFn       onTestCrash;
 };
 
-constexpr UnitTestSuiteHandle InvalidUnitTestSuiteHandle = 0;
-constexpr UnitTestHandle      InvalidUnitTestHandle      = 0;
+constexpr UnitTestSuiteHandle InvalidUnitTestSuiteHandle = nullptr;
+constexpr UnitTestHandle      InvalidUnitTestHandle      = nullptr;
 
 UnitTestResult createUnitTestContext(UnitTestContext** outCtx);
 void           destroyUnitTestContext(UnitTestContext* ctx);

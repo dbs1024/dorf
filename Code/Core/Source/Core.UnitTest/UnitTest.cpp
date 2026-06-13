@@ -1,7 +1,7 @@
 // Copyright (c) Darrin Stewart. All rights reserved.
 #include "Core.UnitTest/UnitTest.h"
 
-#include "Core.Memory/FixedItemPool.h"
+#include "Core.Memory/SlabAllocator.h"
 
 #include <cstring>
 #include <exception>
@@ -11,63 +11,60 @@
 #include <Windows.h>
 #endif
 
-namespace
+enum class NodeType : unsigned { None = 0, Suite, Test };
+
+struct ChildRef
 {
-	enum class NodeType : unsigned { None = 0, Suite, Test };
+	NodeType type;
+	void*    ptr;
+};
 
-	struct ChildRef
-	{
-		NodeType type;
-		int      handle;
-	};
+constexpr int MaxUnitTestSuites = 1024;
+constexpr int MaxUnitTestTests  = 2048;
 
-	constexpr int MaxUnitTestSuites = 1024;
-	constexpr int MaxUnitTestTests  = 2048;
+struct UnitTestSuite
+{
+	bool                inUse;
+	const char*         name;
+	UnitTestSuiteHandle parent;
+	ChildRef            firstChild;
+	ChildRef            lastChild;
+	ChildRef            nextSibling;
+};
 
-	struct UnitTestSuite
-	{
-		bool        inUse;
-		const char* name;
-		int         parent;
-		ChildRef    firstChild;
-		ChildRef    lastChild;
-		ChildRef    nextSibling;
-	};
-
-	struct UnitTest
-	{
-		bool        inUse;
-		const char* name;
-		UnitTestFn  fn;
-		int         parent;
-		ChildRef    nextSibling;
-	};
-}
+struct UnitTest
+{
+	bool                inUse;
+	const char*         name;
+	UnitTestFn          fn;
+	UnitTestSuiteHandle parent;
+	ChildRef            nextSibling;
+};
 
 struct UnitTestContext
 {
 	ChildRef                firstChild;
 	ChildRef                lastChild;
-	FixedItemPoolHandle     suitePool;
-	FixedItemPoolHandle     testPool;
+	SlabCache*              suitePool;
+	SlabCache*              testPool;
 	const UnitTestListener* listener;
 	UnitTestSuiteHandle     currentSuite;
 	UnitTestHandle          currentTest;
 };
 
-static ChildRef& getNextSiblingRef(UnitTestContext* ctx, ChildRef ref)
+static ChildRef& getNextSiblingRef(ChildRef ref)
 {
 	if (ref.type == NodeType::Suite)
-		return static_cast<UnitTestSuite*>(getFixedItemPtr(ctx->suitePool, ref.handle))->nextSibling;
-	return static_cast<UnitTest*>(getFixedItemPtr(ctx->testPool, ref.handle))->nextSibling;
+		return static_cast<UnitTestSuite*>(ref.ptr)->nextSibling;
+	return static_cast<UnitTest*>(ref.ptr)->nextSibling;
 }
 
-static void appendChildTo(UnitTestContext* ctx, ChildRef& firstChild, ChildRef& lastChild, ChildRef newRef)
+static void appendChildTo(ChildRef& firstChild, ChildRef& lastChild, ChildRef newRef)
 {
 	if (firstChild.type == NodeType::None)
 		firstChild = newRef;
 	else
-		getNextSiblingRef(ctx, lastChild) = newRef;
+		getNextSiblingRef(lastChild) = newRef;
 	lastChild = newRef;
 }
 
@@ -76,19 +73,20 @@ static void freeChildren(UnitTestContext* ctx, ChildRef first)
 	ChildRef current = first;
 	while (current.type != NodeType::None)
 	{
-		ChildRef next = getNextSiblingRef(ctx, current);
+		ChildRef next = getNextSiblingRef(current);
 		if (current.type == NodeType::Suite)
 		{
-			UnitTestSuite* suite = static_cast<UnitTestSuite*>(getFixedItemPtr(ctx->suitePool, current.handle));
+			UnitTestSuite* suite = static_cast<UnitTestSuite*>(current.ptr);
 			ChildRef childFirst  = suite->firstChild;
 			suite->inUse         = false;
-			freeFixedItem(ctx->suitePool, current.handle);
+			slabCacheFree(ctx->suitePool, suite);
 			freeChildren(ctx, childFirst);
 		}
 		else
 		{
-			static_cast<UnitTest*>(getFixedItemPtr(ctx->testPool, current.handle))->inUse = false;
-			freeFixedItem(ctx->testPool, current.handle);
+			UnitTest* test = static_cast<UnitTest*>(current.ptr);
+			test->inUse    = false;
+			slabCacheFree(ctx->testPool, test);
 		}
 		current = next;
 	}
@@ -127,38 +125,38 @@ static void runNode(UnitTestContext* ctx, ChildRef ref, UnitTestSuiteHandle suit
 {
 	if (ref.type == NodeType::Suite)
 	{
-		UnitTestSuite* suite = static_cast<UnitTestSuite*>(getFixedItemPtr(ctx->suitePool, ref.handle));
+		UnitTestSuite* suite = static_cast<UnitTestSuite*>(ref.ptr);
 		if (ctx->listener && ctx->listener->onSuiteBegin)
-			ctx->listener->onSuiteBegin(ref.handle);
-		runChildren(ctx, suite->firstChild, ref.handle);
+			ctx->listener->onSuiteBegin(suite);
+		runChildren(ctx, suite->firstChild, suite);
 		if (ctx->listener && ctx->listener->onSuiteEnd)
-			ctx->listener->onSuiteEnd(ref.handle);
+			ctx->listener->onSuiteEnd(suite);
 	}
 	else
 	{
-		UnitTest* test = static_cast<UnitTest*>(getFixedItemPtr(ctx->testPool, ref.handle));
+		UnitTest* test = static_cast<UnitTest*>(ref.ptr);
 		if (ctx->listener && ctx->listener->onTestBegin)
-			ctx->listener->onTestBegin(suiteHandle, ref.handle);
+			ctx->listener->onTestBegin(suiteHandle, test);
 		ctx->currentSuite = suiteHandle;
-		ctx->currentTest  = ref.handle;
+		ctx->currentTest  = test;
 		if (test->fn)
 		{
 #if defined(_WIN32)
 			__try
 			{
-				tryInvokeTest(ctx, test->fn, suiteHandle, ref.handle);
+				tryInvokeTest(ctx, test->fn, suiteHandle, test);
 			}
-			__except(crashFilter(ctx, suiteHandle, ref.handle, GetExceptionInformation()))
+			__except(crashFilter(ctx, suiteHandle, test, GetExceptionInformation()))
 			{
 			}
 #else
-			tryInvokeTest(ctx, test->fn, suiteHandle, ref.handle);
+			tryInvokeTest(ctx, test->fn, suiteHandle, test);
 #endif
 		}
 		ctx->currentSuite = InvalidUnitTestSuiteHandle;
 		ctx->currentTest  = InvalidUnitTestHandle;
 		if (ctx->listener && ctx->listener->onTestEnd)
-			ctx->listener->onTestEnd(suiteHandle, ref.handle);
+			ctx->listener->onTestEnd(suiteHandle, test);
 	}
 }
 
@@ -166,7 +164,7 @@ static void runChildren(UnitTestContext* ctx, ChildRef current, UnitTestSuiteHan
 {
 	while (current.type != NodeType::None)
 	{
-		ChildRef next = getNextSiblingRef(ctx, current);
+		ChildRef next = getNextSiblingRef(current);
 		runNode(ctx, current, suiteHandle);
 		current = next;
 	}
@@ -181,8 +179,13 @@ UnitTestResult createUnitTestContext(UnitTestContext** outCtx)
 		return UnitTestResult::OutOfResources;
 	}
 	memset(ctx, 0, sizeof(*ctx));
-	createFixedItemPool(ctx->suitePool, sizeof(UnitTestSuite), MaxUnitTestSuites);
-	createFixedItemPool(ctx->testPool, sizeof(UnitTest), MaxUnitTestTests);
+
+	SlabCacheParams suitePoolParams = { MaxUnitTestSuites, sizeof(UnitTestSuite), 1 };
+	ctx->suitePool = createSlabCache(suitePoolParams);
+
+	SlabCacheParams testPoolParams = { MaxUnitTestTests, sizeof(UnitTest), 1 };
+	ctx->testPool = createSlabCache(testPoolParams);
+
 	*outCtx = ctx;
 	return UnitTestResult::Success;
 }
@@ -191,8 +194,9 @@ void destroyUnitTestContext(UnitTestContext* ctx)
 {
 	if (!ctx)
 		return;
-	destroyFixedItemPool(ctx->suitePool);
-	destroyFixedItemPool(ctx->testPool);
+	freeChildren(ctx, ctx->firstChild);
+	destroySlabCache(ctx->suitePool);
+	destroySlabCache(ctx->testPool);
 	delete ctx;
 }
 
@@ -203,39 +207,34 @@ void setUnitTestListener(UnitTestContext* ctx, const UnitTestListener* listener)
 
 UnitTestResult createUnitTestSuite(UnitTestSuiteHandle& outHandle, UnitTestContext* ctx, const char* name, UnitTestSuiteHandle parent)
 {
-	FixedItemHandle slot;
-	UnitTestSuite*  suite = static_cast<UnitTestSuite*>(allocFixedItem(slot, ctx->suitePool));
+	UnitTestSuite* suite = static_cast<UnitTestSuite*>(slabCacheAlloc(ctx->suitePool));
 	if (!suite)
 	{
 		outHandle = InvalidUnitTestSuiteHandle;
 		return UnitTestResult::OutOfResources;
 	}
 
-	suite->inUse         = true;
-	suite->name          = name;
-	suite->parent        = parent;
-	suite->firstChild    = { NodeType::None, 0 };
-	suite->lastChild     = { NodeType::None, 0 };
-	suite->nextSibling   = { NodeType::None, 0 };
+	suite->inUse       = true;
+	suite->name        = name;
+	suite->parent      = parent;
+	suite->firstChild  = { NodeType::None, nullptr };
+	suite->lastChild   = { NodeType::None, nullptr };
+	suite->nextSibling = { NodeType::None, nullptr };
 
-	ChildRef newRef = { NodeType::Suite, slot };
+	ChildRef newRef = { NodeType::Suite, suite };
 
 	if (parent == InvalidUnitTestSuiteHandle)
-		appendChildTo(ctx, ctx->firstChild, ctx->lastChild, newRef);
+		appendChildTo(ctx->firstChild, ctx->lastChild, newRef);
 	else
-	{
-		UnitTestSuite* parentSuite = static_cast<UnitTestSuite*>(getFixedItemPtr(ctx->suitePool, parent));
-		appendChildTo(ctx, parentSuite->firstChild, parentSuite->lastChild, newRef);
-	}
+		appendChildTo(parent->firstChild, parent->lastChild, newRef);
 
-	outHandle = slot;
+	outHandle = suite;
 	return UnitTestResult::Success;
 }
 
 UnitTestResult createUnitTest(UnitTestHandle& outHandle, UnitTestContext* ctx, const char* name, UnitTestFn fn, UnitTestSuiteHandle parent)
 {
-	FixedItemHandle slot;
-	UnitTest*       test = static_cast<UnitTest*>(allocFixedItem(slot, ctx->testPool));
+	UnitTest* test = static_cast<UnitTest*>(slabCacheAlloc(ctx->testPool));
 	if (!test)
 	{
 		outHandle = InvalidUnitTestHandle;
@@ -246,19 +245,16 @@ UnitTestResult createUnitTest(UnitTestHandle& outHandle, UnitTestContext* ctx, c
 	test->name        = name;
 	test->fn          = fn;
 	test->parent      = parent;
-	test->nextSibling = { NodeType::None, 0 };
+	test->nextSibling = { NodeType::None, nullptr };
 
-	ChildRef newRef = { NodeType::Test, slot };
+	ChildRef newRef = { NodeType::Test, test };
 
 	if (parent == InvalidUnitTestSuiteHandle)
-		appendChildTo(ctx, ctx->firstChild, ctx->lastChild, newRef);
+		appendChildTo(ctx->firstChild, ctx->lastChild, newRef);
 	else
-	{
-		UnitTestSuite* parentSuite = static_cast<UnitTestSuite*>(getFixedItemPtr(ctx->suitePool, parent));
-		appendChildTo(ctx, parentSuite->firstChild, parentSuite->lastChild, newRef);
-	}
+		appendChildTo(parent->firstChild, parent->lastChild, newRef);
 
-	outHandle = slot;
+	outHandle = test;
 	return UnitTestResult::Success;
 }
 
@@ -277,16 +273,16 @@ void unitTestExpect(UnitTestContext* ctx, int condition, const char* expr, const
 
 const char* getUnitTestSuiteName(UnitTestContext* ctx, UnitTestSuiteHandle suite)
 {
-	if (suite <= 0 || suite > MaxUnitTestSuites)
+	(void)ctx;
+	if (suite == InvalidUnitTestSuiteHandle)
 		return nullptr;
-	UnitTestSuite* s = static_cast<UnitTestSuite*>(getFixedItemPtr(ctx->suitePool, suite));
-	return s->inUse ? s->name : nullptr;
+	return suite->inUse ? suite->name : nullptr;
 }
 
 const char* getUnitTestName(UnitTestContext* ctx, UnitTestHandle test)
 {
-	if (test <= 0 || test > MaxUnitTestTests)
+	(void)ctx;
+	if (test == InvalidUnitTestHandle)
 		return nullptr;
-	UnitTest* t = static_cast<UnitTest*>(getFixedItemPtr(ctx->testPool, test));
-	return t->inUse ? t->name : nullptr;
+	return test->inUse ? test->name : nullptr;
 }
