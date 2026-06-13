@@ -9,7 +9,6 @@ struct VfsBackendFile;
 struct VfsBackendDir;
 struct VfsBackendRequest;
 
-typedef Vfs*               VfsHandle;
 typedef VfsFile*           VfsFileHandle;
 typedef VfsDir*            VfsDirHandle;
 typedef VfsRequest*        VfsRequestHandle;
@@ -80,21 +79,21 @@ struct VfsBackendOps
 };
 
 // Lifecycle
-VfsResult vfsCreate(VfsHandle* outVfs);
-void      vfsDestroy(VfsHandle vfs);
+VfsResult vfsCreate(Vfs** outVfs);
+void      vfsDestroy(Vfs* vfs);
 
 // Mounting
 // backendPath identifies the backend source for vfsUnmount; pass nullptr for custom backends with no path identity.
-VfsResult vfsMountCustom(VfsHandle vfs, const char* mountPath, const char* backendPath,
+VfsResult vfsMountCustom(Vfs* vfs, const char* mountPath, const char* backendPath,
                          const VfsBackendOps* ops, void* backendCtx, int priority);
-VfsResult vfsMountDisk(VfsHandle vfs, const char* mountPath, const char* diskPath, int priority);
-VfsResult vfsMountZip(VfsHandle vfs, const char* mountPath, const char* zipPath, int priority);
-VfsResult vfsMountNetwork(VfsHandle vfs, const char* mountPath, const char* baseUrl, int priority);
+VfsResult vfsMountDisk(Vfs* vfs, const char* mountPath, const char* diskPath, int priority);
+VfsResult vfsMountZip(Vfs* vfs, const char* mountPath, const char* zipPath, int priority);
+VfsResult vfsMountNetwork(Vfs* vfs, const char* mountPath, const char* baseUrl, int priority);
 // Removes the first mount matching mountPath. If backendPath is non-null and non-empty, also matches on backendPath.
-VfsResult vfsUnmount(VfsHandle vfs, const char* mountPath, const char* backendPath);
+VfsResult vfsUnmount(Vfs* vfs, const char* mountPath, const char* backendPath);
 
 // File operations
-VfsResult vfsOpenFile(VfsFileHandle* outFile, VfsHandle vfs, const char* path, VfsOpenFlags flags);
+VfsResult vfsOpenFile(VfsFileHandle* outFile, Vfs* vfs, const char* path, VfsOpenFlags flags);
 VfsResult vfsCloseFile(VfsFileHandle file);
 VfsResult vfsReadFile(VfsFileHandle file, void* buffer, unsigned int bytesToRead, unsigned int* outBytesRead);
 VfsResult vfsWriteFile(VfsFileHandle file, const void* data, unsigned int bytesToWrite, unsigned int* outBytesWritten);
@@ -103,9 +102,9 @@ VfsResult vfsTellFile(VfsFileHandle file, long long* outPosition);
 VfsResult vfsGetFileSize(VfsFileHandle file, long long* outSize);
 
 // Directory operations
-VfsResult vfsFileExists(VfsHandle vfs, const char* path);
-VfsResult vfsDirExists(VfsHandle vfs, const char* path);
-VfsResult vfsOpenDir(VfsDirHandle* outDir, VfsHandle vfs, const char* path);
+VfsResult vfsFileExists(Vfs* vfs, const char* path);
+VfsResult vfsDirExists(Vfs* vfs, const char* path);
+VfsResult vfsOpenDir(VfsDirHandle* outDir, Vfs* vfs, const char* path);
 VfsResult vfsReadDir(VfsDirHandle dir, VfsDirEntry* outEntry);
 VfsResult vfsCloseDir(VfsDirHandle dir);
 

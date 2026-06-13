@@ -26,44 +26,38 @@ static const int          MaxVfsRequestsPerMount = 1024;
 
 struct Vfs
 {
-	FixedItemPoolHandle mountPool;
-	FixedItemHandle     mountHandles[MaxVfsMounts];
-	unsigned int        mountCount;
+	VfsMount     mounts[MaxVfsMounts];
+	unsigned int mountCount;
 };
 
 struct VfsFile
 {
 	VfsBackendFileHandle backendFile;
-	FixedItemPoolHandle  mountPool;
-	FixedItemHandle      mountHandle;
+	VfsMount*            mount;
 	FixedItemHandle      filePoolHandle;
 };
 
 struct VfsDir
 {
 	VfsBackendDirHandle backendDir;
-	FixedItemPoolHandle mountPool;
-	FixedItemHandle     mountHandle;
+	VfsMount*           mount;
 	FixedItemHandle     dirPoolHandle;
 };
 
 struct VfsRequest
 {
 	VfsBackendRequestHandle backendRequest;
-	FixedItemPoolHandle     mountPool;
-	FixedItemHandle         mountHandle;
+	VfsMount*               mount;
 	FixedItemHandle         requestPoolHandle;
 };
 
-static const VfsMount* findMount(const Vfs* vfs, const char* path, const char** outRelativePath,
-                                 FixedItemHandle* outMountHandle = nullptr)
+static VfsMount* findMount(Vfs* vfs, const char* path, const char** outRelativePath)
 {
-	const VfsMount* best       = nullptr;
-	FixedItemHandle bestHandle = InvalidFixedItemHandle;
+	VfsMount* best = nullptr;
 
 	for (unsigned int i = 0; i < vfs->mountCount; ++i)
 	{
-		const VfsMount* mount = (const VfsMount*)getFixedItemPtr(vfs->mountPool, vfs->mountHandles[i]);
+		VfsMount* mount = &vfs->mounts[i];
 		size_t prefixLen = strlen(mount->mountPath);
 		if (strncmp(path, mount->mountPath, prefixLen) != 0)
 			continue;
@@ -73,10 +67,7 @@ static const VfsMount* findMount(const Vfs* vfs, const char* path, const char** 
 			continue;
 
 		if (best == nullptr || mount->priority > best->priority)
-		{
-			best       = mount;
-			bestHandle = vfs->mountHandles[i];
-		}
+			best = mount;
 	}
 
 	if (best != nullptr && outRelativePath != nullptr)
@@ -87,13 +78,10 @@ static const VfsMount* findMount(const Vfs* vfs, const char* path, const char** 
 			(*outRelativePath)++;
 	}
 
-	if (outMountHandle != nullptr)
-		*outMountHandle = bestHandle;
-
 	return best;
 }
 
-VfsResult vfsCreate(VfsHandle* outVfs)
+VfsResult vfsCreate(Vfs** outVfs)
 {
 	if (outVfs == nullptr)
 		return VfsResult::InvalidArg;
@@ -104,24 +92,18 @@ VfsResult vfsCreate(VfsHandle* outVfs)
 
 	memset(vfs, 0, sizeof(Vfs));
 
-	if (createFixedItemPool(vfs->mountPool, sizeof(VfsMount), (int)MaxVfsMounts) != FixedItemPoolResult::Success)
-	{
-		delete vfs;
-		return VfsResult::InternalError;
-	}
-
 	*outVfs = vfs;
 	return VfsResult::Ok;
 }
 
-void vfsDestroy(VfsHandle vfs)
+void vfsDestroy(Vfs* vfs)
 {
 	if (vfs == nullptr)
 		return;
 
 	for (unsigned int i = 0; i < vfs->mountCount; ++i)
 	{
-		VfsMount* mount = (VfsMount*)getFixedItemPtr(vfs->mountPool, vfs->mountHandles[i]);
+		VfsMount* mount = &vfs->mounts[i];
 		if (mount->ops.unmount != nullptr)
 			mount->ops.unmount(mount->backendCtx);
 		destroyFixedItemPool(mount->filePool);
@@ -129,12 +111,10 @@ void vfsDestroy(VfsHandle vfs)
 		destroyFixedItemPool(mount->requestPool);
 	}
 
-	destroyFixedItemPool(vfs->mountPool);
-
 	delete vfs;
 }
 
-VfsResult vfsMountCustom(VfsHandle vfs, const char* mountPath, const char* backendPath,
+VfsResult vfsMountCustom(Vfs* vfs, const char* mountPath, const char* backendPath,
                          const VfsBackendOps* ops, void* backendCtx, int priority)
 {
 	if (vfs == nullptr || mountPath == nullptr || ops == nullptr)
@@ -143,12 +123,7 @@ VfsResult vfsMountCustom(VfsHandle vfs, const char* mountPath, const char* backe
 	if (vfs->mountCount == MaxVfsMounts)
 		return VfsResult::InternalError;
 
-	FixedItemHandle mountHandle = InvalidFixedItemHandle;
-	void* ptr = allocFixedItem(mountHandle, vfs->mountPool);
-	if (ptr == nullptr)
-		return VfsResult::InternalError;
-
-	VfsMount* mount = (VfsMount*)ptr;
+	VfsMount* mount = &vfs->mounts[vfs->mountCount];
 	snprintf(mount->mountPath, sizeof(mount->mountPath), "%s", mountPath);
 	snprintf(mount->backendPath, sizeof(mount->backendPath), "%s", backendPath != nullptr ? backendPath : "");
 	mount->ops        = *ops;
@@ -159,17 +134,13 @@ VfsResult vfsMountCustom(VfsHandle vfs, const char* mountPath, const char* backe
 	{
 		VfsResult result = mount->ops.mount(backendCtx);
 		if (result != VfsResult::Ok)
-		{
-			freeFixedItem(vfs->mountPool, mountHandle);
 			return result;
-		}
 	}
 
 	if (createFixedItemPool(mount->filePool, sizeof(VfsFile), MaxVfsFilesPerMount) != FixedItemPoolResult::Success)
 	{
 		if (mount->ops.unmount != nullptr)
 			mount->ops.unmount(backendCtx);
-		freeFixedItem(vfs->mountPool, mountHandle);
 		return VfsResult::InternalError;
 	}
 
@@ -178,7 +149,6 @@ VfsResult vfsMountCustom(VfsHandle vfs, const char* mountPath, const char* backe
 		destroyFixedItemPool(mount->filePool);
 		if (mount->ops.unmount != nullptr)
 			mount->ops.unmount(backendCtx);
-		freeFixedItem(vfs->mountPool, mountHandle);
 		return VfsResult::InternalError;
 	}
 
@@ -188,15 +158,14 @@ VfsResult vfsMountCustom(VfsHandle vfs, const char* mountPath, const char* backe
 		destroyFixedItemPool(mount->dirPool);
 		if (mount->ops.unmount != nullptr)
 			mount->ops.unmount(backendCtx);
-		freeFixedItem(vfs->mountPool, mountHandle);
 		return VfsResult::InternalError;
 	}
 
-	vfs->mountHandles[vfs->mountCount++] = mountHandle;
+	vfs->mountCount++;
 	return VfsResult::Ok;
 }
 
-VfsResult vfsMountZip(VfsHandle vfs, const char* mountPath, const char* zipPath, int priority)
+VfsResult vfsMountZip(Vfs* vfs, const char* mountPath, const char* zipPath, int priority)
 {
 	(void)vfs;
 	(void)mountPath;
@@ -205,7 +174,7 @@ VfsResult vfsMountZip(VfsHandle vfs, const char* mountPath, const char* zipPath,
 	return VfsResult::NotImplemented;
 }
 
-VfsResult vfsMountNetwork(VfsHandle vfs, const char* mountPath, const char* baseUrl, int priority)
+VfsResult vfsMountNetwork(Vfs* vfs, const char* mountPath, const char* baseUrl, int priority)
 {
 	(void)vfs;
 	(void)mountPath;
@@ -214,14 +183,14 @@ VfsResult vfsMountNetwork(VfsHandle vfs, const char* mountPath, const char* base
 	return VfsResult::NotImplemented;
 }
 
-VfsResult vfsUnmount(VfsHandle vfs, const char* mountPath, const char* backendPath)
+VfsResult vfsUnmount(Vfs* vfs, const char* mountPath, const char* backendPath)
 {
 	if (vfs == nullptr || mountPath == nullptr)
 		return VfsResult::InvalidArg;
 
 	for (unsigned int i = 0; i < vfs->mountCount; ++i)
 	{
-		VfsMount* mount = (VfsMount*)getFixedItemPtr(vfs->mountPool, vfs->mountHandles[i]);
+		VfsMount* mount = &vfs->mounts[i];
 
 		if (strcmp(mount->mountPath, mountPath) != 0)
 			continue;
@@ -236,22 +205,20 @@ VfsResult vfsUnmount(VfsHandle vfs, const char* mountPath, const char* backendPa
 		destroyFixedItemPool(mount->filePool);
 		destroyFixedItemPool(mount->dirPool);
 		destroyFixedItemPool(mount->requestPool);
-		freeFixedItem(vfs->mountPool, vfs->mountHandles[i]);
-		vfs->mountHandles[i] = vfs->mountHandles[--vfs->mountCount];
+		vfs->mounts[i] = vfs->mounts[--vfs->mountCount];
 		return VfsResult::Ok;
 	}
 
 	return VfsResult::NotFound;
 }
 
-VfsResult vfsOpenFile(VfsFileHandle* outFile, VfsHandle vfs, const char* path, VfsOpenFlags flags)
+VfsResult vfsOpenFile(VfsFileHandle* outFile, Vfs* vfs, const char* path, VfsOpenFlags flags)
 {
 	if (outFile == nullptr || vfs == nullptr || path == nullptr)
 		return VfsResult::InvalidArg;
 
-	const char*     relativePath = nullptr;
-	FixedItemHandle mountHandle  = InvalidFixedItemHandle;
-	const VfsMount* mount = findMount(vfs, path, &relativePath, &mountHandle);
+	const char* relativePath = nullptr;
+	VfsMount*   mount = findMount(vfs, path, &relativePath);
 	if (mount == nullptr)
 		return VfsResult::NotFound;
 
@@ -273,9 +240,8 @@ VfsResult vfsOpenFile(VfsFileHandle* outFile, VfsHandle vfs, const char* path, V
 	}
 
 	VfsFile* file = (VfsFile*)ptr;
-	file->backendFile = backendFile;
-	file->mountPool   = vfs->mountPool;
-	file->mountHandle = mountHandle;
+	file->backendFile    = backendFile;
+	file->mount          = mount;
 	file->filePoolHandle = fileHandle;
 
 	*outFile = file;
@@ -287,7 +253,7 @@ VfsResult vfsCloseFile(VfsFileHandle file)
 	if (file == nullptr)
 		return VfsResult::InvalidArg;
 
-	VfsMount* mount = (VfsMount*)getFixedItemPtr(file->mountPool, file->mountHandle);
+	VfsMount* mount = file->mount;
 
 	VfsResult result = VfsResult::Ok;
 	if (mount->ops.closeFile != nullptr)
@@ -302,7 +268,7 @@ VfsResult vfsReadFile(VfsFileHandle file, void* buffer, unsigned int bytesToRead
 	if (file == nullptr || buffer == nullptr)
 		return VfsResult::InvalidArg;
 
-	VfsMount* mount = (VfsMount*)getFixedItemPtr(file->mountPool, file->mountHandle);
+	VfsMount* mount = file->mount;
 	if (mount->ops.readFile == nullptr)
 		return VfsResult::NotSupported;
 
@@ -314,7 +280,7 @@ VfsResult vfsWriteFile(VfsFileHandle file, const void* data, unsigned int bytesT
 	if (file == nullptr || data == nullptr)
 		return VfsResult::InvalidArg;
 
-	VfsMount* mount = (VfsMount*)getFixedItemPtr(file->mountPool, file->mountHandle);
+	VfsMount* mount = file->mount;
 	if (mount->ops.writeFile == nullptr)
 		return VfsResult::NotSupported;
 
@@ -326,7 +292,7 @@ VfsResult vfsSeekFile(VfsFileHandle file, long long offset, VfsSeekOrigin origin
 	if (file == nullptr)
 		return VfsResult::InvalidArg;
 
-	VfsMount* mount = (VfsMount*)getFixedItemPtr(file->mountPool, file->mountHandle);
+	VfsMount* mount = file->mount;
 	if (mount->ops.seekFile == nullptr)
 		return VfsResult::NotSupported;
 
@@ -338,7 +304,7 @@ VfsResult vfsTellFile(VfsFileHandle file, long long* outPosition)
 	if (file == nullptr || outPosition == nullptr)
 		return VfsResult::InvalidArg;
 
-	VfsMount* mount = (VfsMount*)getFixedItemPtr(file->mountPool, file->mountHandle);
+	VfsMount* mount = file->mount;
 	if (mount->ops.tellFile == nullptr)
 		return VfsResult::NotSupported;
 
@@ -350,20 +316,20 @@ VfsResult vfsGetFileSize(VfsFileHandle file, long long* outSize)
 	if (file == nullptr || outSize == nullptr)
 		return VfsResult::InvalidArg;
 
-	VfsMount* mount = (VfsMount*)getFixedItemPtr(file->mountPool, file->mountHandle);
+	VfsMount* mount = file->mount;
 	if (mount->ops.getFileSize == nullptr)
 		return VfsResult::NotSupported;
 
 	return mount->ops.getFileSize(file->backendFile, outSize);
 }
 
-VfsResult vfsFileExists(VfsHandle vfs, const char* path)
+VfsResult vfsFileExists(Vfs* vfs, const char* path)
 {
 	if (vfs == nullptr || path == nullptr)
 		return VfsResult::InvalidArg;
 
 	const char* relativePath = nullptr;
-	const VfsMount* mount = findMount(vfs, path, &relativePath);
+	VfsMount*   mount = findMount(vfs, path, &relativePath);
 	if (mount == nullptr)
 		return VfsResult::NotFound;
 
@@ -373,13 +339,13 @@ VfsResult vfsFileExists(VfsHandle vfs, const char* path)
 	return mount->ops.fileExists(mount->backendCtx, relativePath);
 }
 
-VfsResult vfsDirExists(VfsHandle vfs, const char* path)
+VfsResult vfsDirExists(Vfs* vfs, const char* path)
 {
 	if (vfs == nullptr || path == nullptr)
 		return VfsResult::InvalidArg;
 
 	const char* relativePath = nullptr;
-	const VfsMount* mount = findMount(vfs, path, &relativePath);
+	VfsMount*   mount = findMount(vfs, path, &relativePath);
 	if (mount == nullptr)
 		return VfsResult::NotFound;
 
@@ -389,14 +355,13 @@ VfsResult vfsDirExists(VfsHandle vfs, const char* path)
 	return mount->ops.dirExists(mount->backendCtx, relativePath);
 }
 
-VfsResult vfsOpenDir(VfsDirHandle* outDir, VfsHandle vfs, const char* path)
+VfsResult vfsOpenDir(VfsDirHandle* outDir, Vfs* vfs, const char* path)
 {
 	if (outDir == nullptr || vfs == nullptr || path == nullptr)
 		return VfsResult::InvalidArg;
 
-	const char*     relativePath = nullptr;
-	FixedItemHandle mountHandle  = InvalidFixedItemHandle;
-	const VfsMount* mount = findMount(vfs, path, &relativePath, &mountHandle);
+	const char* relativePath = nullptr;
+	VfsMount*   mount = findMount(vfs, path, &relativePath);
 	if (mount == nullptr)
 		return VfsResult::NotFound;
 
@@ -418,9 +383,8 @@ VfsResult vfsOpenDir(VfsDirHandle* outDir, VfsHandle vfs, const char* path)
 	}
 
 	VfsDir* dir = (VfsDir*)ptr;
-	dir->backendDir  = backendDir;
-	dir->mountPool   = vfs->mountPool;
-	dir->mountHandle = mountHandle;
+	dir->backendDir    = backendDir;
+	dir->mount         = mount;
 	dir->dirPoolHandle = dirHandle;
 
 	*outDir = dir;
@@ -432,7 +396,7 @@ VfsResult vfsReadDir(VfsDirHandle dir, VfsDirEntry* outEntry)
 	if (dir == nullptr || outEntry == nullptr)
 		return VfsResult::InvalidArg;
 
-	VfsMount* mount = (VfsMount*)getFixedItemPtr(dir->mountPool, dir->mountHandle);
+	VfsMount* mount = dir->mount;
 	if (mount->ops.readDir == nullptr)
 		return VfsResult::NotSupported;
 
@@ -444,7 +408,7 @@ VfsResult vfsCloseDir(VfsDirHandle dir)
 	if (dir == nullptr)
 		return VfsResult::InvalidArg;
 
-	VfsMount* mount = (VfsMount*)getFixedItemPtr(dir->mountPool, dir->mountHandle);
+	VfsMount* mount = dir->mount;
 
 	VfsResult result = VfsResult::Ok;
 	if (mount->ops.closeDir != nullptr)
@@ -461,7 +425,7 @@ VfsResult vfsReadFileAsync(VfsRequestHandle* outRequest, VfsFileHandle file,
 	if (outRequest == nullptr || file == nullptr || buffer == nullptr)
 		return VfsResult::InvalidArg;
 
-	VfsMount* mount = (VfsMount*)getFixedItemPtr(file->mountPool, file->mountHandle);
+	VfsMount* mount = file->mount;
 	if (mount->ops.readFileAsync == nullptr)
 		return VfsResult::NotSupported;
 
@@ -481,9 +445,8 @@ VfsResult vfsReadFileAsync(VfsRequestHandle* outRequest, VfsFileHandle file,
 	}
 
 	VfsRequest* request = (VfsRequest*)ptr;
-	request->backendRequest = backendRequest;
-	request->mountPool      = file->mountPool;
-	request->mountHandle    = file->mountHandle;
+	request->backendRequest    = backendRequest;
+	request->mount             = file->mount;
 	request->requestPoolHandle = requestHandle;
 
 	*outRequest = request;
@@ -495,7 +458,7 @@ VfsResult vfsPollRequest(VfsRequestHandle request, unsigned int* outBytesRead)
 	if (request == nullptr || outBytesRead == nullptr)
 		return VfsResult::InvalidArg;
 
-	VfsMount* mount = (VfsMount*)getFixedItemPtr(request->mountPool, request->mountHandle);
+	VfsMount* mount = request->mount;
 	if (mount->ops.pollRequest == nullptr)
 		return VfsResult::NotSupported;
 
@@ -507,7 +470,7 @@ void vfsCancelRequest(VfsRequestHandle request)
 	if (request == nullptr)
 		return;
 
-	VfsMount* mount = (VfsMount*)getFixedItemPtr(request->mountPool, request->mountHandle);
+	VfsMount* mount = request->mount;
 	if (mount->ops.cancelRequest != nullptr)
 		mount->ops.cancelRequest(request->backendRequest);
 }
@@ -517,7 +480,7 @@ void vfsDestroyRequest(VfsRequestHandle request)
 	if (request == nullptr)
 		return;
 
-	VfsMount* mount = (VfsMount*)getFixedItemPtr(request->mountPool, request->mountHandle);
+	VfsMount* mount = request->mount;
 	if (mount->ops.destroyRequest != nullptr)
 		mount->ops.destroyRequest(request->backendRequest);
 

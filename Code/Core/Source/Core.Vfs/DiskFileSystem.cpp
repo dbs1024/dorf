@@ -1,7 +1,7 @@
 // Copyright (c) Darrin Stewart. All rights reserved.
 #include "Core.Vfs/Vfs.h"
 
-#include "Core.Memory/FixedItemPool.h"
+#include "Core.Memory/SlabAllocator.h"
 
 #include <cstdio>
 #include <cstring>
@@ -10,18 +10,19 @@
 #include <windows.h>
 
 static const int MaxDiskFiles = 1024;
+static const int MaxDiskDirs  = 1024;
 
 struct DiskCtx
 {
-	char                basePath[512];
-	FixedItemPoolHandle filePool = InvalidFixedItemPoolHandle;
+	char       basePath[512];
+	SlabCache* filePool;
+	SlabCache* dirPool;
 };
 
 struct DiskFile
 {
-	FILE*               handle;
-	FixedItemPoolHandle pool;
-	FixedItemHandle     poolHandle;
+	FILE*      handle;
+	SlabCache* pool;
 };
 
 struct DiskDir
@@ -29,6 +30,7 @@ struct DiskDir
 	HANDLE           findHandle;
 	WIN32_FIND_DATAA findData;
 	bool             hasPending;
+	SlabCache*       pool;
 };
 
 static void buildPath(char* outPath, size_t outSize, const char* basePath, const char* relativePath)
@@ -61,7 +63,8 @@ static void createParentDirectories(const char* filePath)
 static void diskUnmount(void* backendCtx)
 {
 	DiskCtx* ctx = (DiskCtx*)backendCtx;
-	destroyFixedItemPool(ctx->filePool);
+	destroySlabCache(ctx->filePool);
+	destroySlabCache(ctx->dirPool);
 	delete ctx;
 }
 
@@ -90,8 +93,7 @@ static VfsResult diskOpenFile(VfsBackendFileHandle* outFile, void* backendCtx,
 	if (f == nullptr)
 		return VfsResult::NotFound;
 
-	FixedItemHandle poolHandle = InvalidFixedItemHandle;
-	void* ptr = allocFixedItem(poolHandle, ctx->filePool);
+	void* ptr = slabCacheAlloc(ctx->filePool);
 	if (ptr == nullptr)
 	{
 		fclose(f);
@@ -99,9 +101,8 @@ static VfsResult diskOpenFile(VfsBackendFileHandle* outFile, void* backendCtx,
 	}
 
 	DiskFile* diskFile = (DiskFile*)ptr;
-	diskFile->handle     = f;
-	diskFile->pool       = ctx->filePool;
-	diskFile->poolHandle = poolHandle;
+	diskFile->handle = f;
+	diskFile->pool   = ctx->filePool;
 
 	*outFile = (VfsBackendFileHandle)diskFile;
 	return VfsResult::Ok;
@@ -111,7 +112,7 @@ static VfsResult diskCloseFile(VfsBackendFileHandle file)
 {
 	DiskFile* diskFile = (DiskFile*)file;
 	fclose(diskFile->handle);
-	freeFixedItem(diskFile->pool, diskFile->poolHandle);
+	slabCacheFree(diskFile->pool, diskFile);
 	return VfsResult::Ok;
 }
 
@@ -226,14 +227,17 @@ static VfsResult diskOpenDir(VfsBackendDirHandle* outDir, void* backendCtx, cons
 	else
 		snprintf(searchPattern, sizeof(searchPattern), "%s/%s/*", ctx->basePath, relativePath);
 
-	DiskDir* diskDir = new (std::nothrow) DiskDir;
-	if (diskDir == nullptr)
+	void* ptr = slabCacheAlloc(ctx->dirPool);
+	if (ptr == nullptr)
 		return VfsResult::InternalError;
+
+	DiskDir* diskDir = (DiskDir*)ptr;
+	diskDir->pool = ctx->dirPool;
 
 	diskDir->findHandle = FindFirstFileA(searchPattern, &diskDir->findData);
 	if (diskDir->findHandle == INVALID_HANDLE_VALUE)
 	{
-		delete diskDir;
+		slabCacheFree(diskDir->pool, diskDir);
 		return VfsResult::NotFound;
 	}
 
@@ -276,11 +280,11 @@ static VfsResult diskCloseDir(VfsBackendDirHandle dir)
 {
 	DiskDir* diskDir = (DiskDir*)dir;
 	FindClose(diskDir->findHandle);
-	delete diskDir;
+	slabCacheFree(diskDir->pool, diskDir);
 	return VfsResult::Ok;
 }
 
-VfsResult vfsMountDisk(VfsHandle vfs, const char* mountPath, const char* diskPath, int priority)
+VfsResult vfsMountDisk(Vfs* vfs, const char* mountPath, const char* diskPath, int priority)
 {
 	if (vfs == nullptr || mountPath == nullptr || diskPath == nullptr)
 		return VfsResult::InvalidArg;
@@ -289,14 +293,15 @@ VfsResult vfsMountDisk(VfsHandle vfs, const char* mountPath, const char* diskPat
 	if (ctx == nullptr)
 		return VfsResult::InternalError;
 
+	memset(ctx, 0, sizeof(DiskCtx));
+
 	snprintf(ctx->basePath, sizeof(ctx->basePath), "%s", diskPath);
 
-	FixedItemPoolResult poolResult = createFixedItemPool(ctx->filePool, sizeof(DiskFile), MaxDiskFiles);
-	if (poolResult != FixedItemPoolResult::Success)
-	{
-		delete ctx;
-		return VfsResult::InternalError;
-	}
+	SlabCacheParams filePoolParams = { MaxDiskFiles, sizeof(DiskFile), 4 };
+	ctx->filePool = createSlabCache(filePoolParams);
+
+	SlabCacheParams dirPoolParams = { MaxDiskDirs, sizeof(DiskDir), 4 };
+	ctx->dirPool = createSlabCache(dirPoolParams);
 
 	static const VfsBackendOps k_diskOps =
 	{

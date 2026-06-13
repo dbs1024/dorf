@@ -28,8 +28,8 @@ namespace
 	struct AssetForgeContext
 	{
 		Logger*                     logger;
-		VfsHandle                   sourceVfs;
-		VfsHandle                   outputVfs;
+		Vfs*                        sourceVfs;
+		Vfs*                        outputVfs;
 		AssetPipelineRegistryHandle registry;
 		AssetForgeDll               dlls[MaxAssetForgeDlls];
 		int                         dllCount;
